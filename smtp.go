@@ -18,13 +18,21 @@ type smtpConfig struct {
 }
 
 func (cfg *smtpConfig) check(ctx context.Context) error {
+	c, err := cfg.dialAndAuth(ctx)
+	if c != nil {
+		c.Close()
+	}
+	return err
+}
+
+func (cfg *smtpConfig) dialAndAuth(ctx context.Context) (*smtp.Client, error) {
 	addr := fmt.Sprintf("%v:%v", cfg.Hostname, cfg.Port)
 
 	var (
 		c   *smtp.Client
 		err error
 	)
-	if cfg.STARTTLS {
+	if cfg.STARTTLS || cfg.InsecureNoTLS {
 		c, err = smtp.Dial(addr)
 		if err == nil && !cfg.InsecureNoTLS {
 			err = c.StartTLS(nil)
@@ -33,9 +41,13 @@ func (cfg *smtpConfig) check(ctx context.Context) error {
 		c, err = smtp.DialTLS(addr, nil)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer c.Close()
 
-	return c.Auth(sasl.NewPlainClient("", cfg.Username, cfg.Password))
+	if err := c.Auth(sasl.NewPlainClient("", cfg.Username, cfg.Password)); err != nil {
+		c.Close()
+		return nil, err
+	}
+
+	return c, err
 }

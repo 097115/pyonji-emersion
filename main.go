@@ -12,7 +12,25 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	p := tea.NewProgram(initialInitModel(ctx))
+	smtpConfig, err := loadGitSendEmailConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if smtpConfig == nil {
+		p := tea.NewProgram(initialInitModel(ctx))
+		if m, err := p.Run(); err != nil {
+			log.Fatal(err)
+		} else {
+			m := m.(initModel)
+			if !m.done {
+				return
+			}
+			smtpConfig = &m.smtpConfig
+		}
+	}
+
+	p := tea.NewProgram(initialSubmitModel(ctx, smtpConfig))
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -21,4 +39,5 @@ func main() {
 var (
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
+	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("202"))
 )

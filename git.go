@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
+
+	"github.com/emersion/go-mbox"
+	"github.com/emersion/go-message/mail"
 )
 
 func getGitConfig(key string) (string, error) {
@@ -84,4 +89,76 @@ func loadGitSendEmailConfig() (*smtpConfig, error) {
 	cfg.Username = user
 	cfg.Password = pass
 	return &cfg, nil
+}
+
+func loadGitSendEmailTo() (*mail.Address, error) {
+	v, err := getGitConfig("sendemail.to")
+	if err != nil {
+		return nil, err
+	} else if v == "" {
+		return nil, nil
+	}
+	addr, err := mail.ParseAddress(v)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sendemail.to: %v", err)
+	}
+	return addr, nil
+}
+
+type logCommit struct {
+	Hash    string
+	Subject string
+}
+
+func loadGitLog(ctx context.Context, revRange string) ([]logCommit, error) {
+	cmd := exec.CommandContext(ctx, "git", "log", "--pretty=format:%h %s", revRange)
+	b, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load git log: %v", err)
+	}
+
+	var log []logCommit
+	for _, l := range strings.Split(string(b), "\n") {
+		if l == "" {
+			continue
+		}
+		hash, subject, _ := strings.Cut(l, " ")
+		log = append(log, logCommit{hash, subject})
+	}
+	return log, nil
+}
+
+func formatGitPatches(ctx context.Context, baseBranch string) ([][]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--thread", "--base="+baseBranch, baseBranch+"..")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	var patches [][]byte
+	mr := mbox.NewReader(stdout)
+	for {
+		r, err := mr.NextMessage()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		b, err := io.ReadAll(r)
+		if err != nil {
+			return nil, err
+		}
+
+		patches = append(patches, b)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return nil, err
+	}
+
+	return patches, nil
 }
