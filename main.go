@@ -18,4 +18,7 @@ func main() {
 	}
 }
 
-var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+var (
+	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
+)

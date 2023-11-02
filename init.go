@@ -29,6 +29,7 @@ type initModel struct {
 	discovering      bool
 	showPassword     bool
 	checkingPassword bool
+	done             bool
 	errMsg           string
 }
 
@@ -97,6 +98,7 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := saveGitSendEmailConfig(&m.smtpConfig); err != nil {
 				log.Fatal(err)
 			}
+			m.done = true
 			return m.quit()
 		}
 	case error:
@@ -129,6 +131,9 @@ func (m initModel) View() string {
 	}
 	if m.errMsg != "" {
 		sb.WriteString(errorStyle.Render("× "+m.errMsg) + "\n")
+	}
+	if m.done {
+		sb.WriteString(successStyle.Render("✓ Saved mail server settings\n"))
 	}
 	return sb.String()
 }
