@@ -7,7 +7,7 @@ import (
 )
 
 func getGitConfig(key string) (string, error) {
-	cmd := exec.Command("git", "config", "--global", "--default=", key)
+	cmd := exec.Command("git", "config", "--default=", key)
 	b, err := cmd.Output()
 	return strings.TrimSpace(string(b)), err
 }
