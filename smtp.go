@@ -12,8 +12,9 @@ import (
 
 type smtpConfig struct {
 	mailconfig.SMTP
-	Username string
-	Password string
+	InsecureNoTLS bool
+	Username      string
+	Password      string
 }
 
 func (cfg *smtpConfig) check(ctx context.Context) error {
@@ -25,7 +26,7 @@ func (cfg *smtpConfig) check(ctx context.Context) error {
 	)
 	if cfg.STARTTLS {
 		c, err = smtp.Dial(addr)
-		if err == nil {
+		if err == nil && !cfg.InsecureNoTLS {
 			err = c.StartTLS(nil)
 		}
 	} else {

@@ -37,3 +37,51 @@ func saveGitSendEmailConfig(cfg *smtpConfig) error {
 	}
 	return nil
 }
+
+func loadGitSendEmailConfig() (*smtpConfig, error) {
+	var server, port, enc, user, pass string
+	entries := map[string]*string{
+		"smtpServer":     &server,
+		"smtpServerPort": &port,
+		"smtpEncryption": &enc,
+		"smtpUser":       &user,
+		"smtpPass":       &pass,
+	}
+	for k, ptr := range entries {
+		v, err := getGitConfig("sendemail." + k)
+		if err != nil {
+			return nil, err
+		}
+		*ptr = v
+	}
+
+	if server == "" {
+		return nil, nil
+	}
+
+	var cfg smtpConfig
+	cfg.Hostname = server
+	switch enc {
+	case "", "ssl":
+		// direct TLS
+	case "tls":
+		cfg.STARTTLS = true
+	case "none":
+		cfg.InsecureNoTLS = true
+	default:
+		return nil, fmt.Errorf("invalid sendemail.smtpEncryption %q", enc)
+	}
+	switch port {
+	case "":
+		if cfg.STARTTLS {
+			cfg.Port = "submission"
+		} else {
+			cfg.Port = "submissions"
+		}
+	default:
+		cfg.Port = port
+	}
+	cfg.Username = user
+	cfg.Password = pass
+	return &cfg, nil
+}
