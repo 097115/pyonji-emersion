@@ -25,7 +25,7 @@ func saveGitSendEmailConfig(cfg *smtpConfig) error {
 
 	kvs := [][2]string{
 		{"smtpServer", cfg.Hostname},
-		{"smtpServerPort", fmt.Sprintf("%v", cfg.Port)},
+		{"smtpServerPort", cfg.Port},
 		{"smtpEncryption", enc},
 		{"smtpUser", cfg.Username},
 		{"smtpPass", cfg.Password}, // TODO: do not store as plaintext

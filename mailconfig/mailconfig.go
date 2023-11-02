@@ -9,7 +9,7 @@ var ErrNotFound = errors.New("mailautoconfig: no mail server found")
 
 type SMTP struct {
 	Hostname string
-	Port     int
+	Port     string
 	STARTTLS bool
 }
 

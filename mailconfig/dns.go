@@ -2,32 +2,33 @@ package mailconfig
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 )
 
-func discoverTCP(ctx context.Context, service, name string) (string, int, error) {
+func discoverTCP(ctx context.Context, service, name string) (string, string, error) {
 	var resolver net.Resolver
 	_, addrs, err := resolver.LookupSRV(ctx, service, "tcp", name)
 	if dnsErr, ok := err.(*net.DNSError); ok {
 		if dnsErr.IsTemporary {
-			return "", 0, err
+			return "", "", err
 		}
 	} else if err != nil {
-		return "", 0, err
+		return "", "", err
 	}
 
 	if len(addrs) == 0 {
-		return "", 0, nil
+		return "", "", nil
 	}
 	addr := addrs[0]
 
 	target := strings.TrimSuffix(addr.Target, ".")
 	if target == "" {
-		return "", 0, nil
+		return "", "", nil
 	}
 
-	return target, int(addr.Port), nil
+	return target, fmt.Sprintf("%v", addr.Port), nil
 }
 
 type dnsProvider struct{}
