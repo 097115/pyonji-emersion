@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-
-	"git.sr.ht/~emersion/pyonji/mailconfig"
 )
 
 func getGitConfig(key string) (string, error) {
@@ -19,7 +17,7 @@ func setGitConfig(key, value string) error {
 	return cmd.Run()
 }
 
-func saveGitSendEmailConfig(cfg *mailconfig.SMTP, username, password string) error {
+func saveGitSendEmailConfig(cfg *smtpConfig) error {
 	enc := "ssl"
 	if cfg.STARTTLS {
 		enc = "tls"
@@ -29,8 +27,8 @@ func saveGitSendEmailConfig(cfg *mailconfig.SMTP, username, password string) err
 		{"smtpServer", cfg.Hostname},
 		{"smtpServerPort", fmt.Sprintf("%v", cfg.Port)},
 		{"smtpEncryption", enc},
-		{"smtpUser", username},
-		{"smtpPass", password}, // TODO: do not store as plaintext
+		{"smtpUser", cfg.Username},
+		{"smtpPass", cfg.Password}, // TODO: do not store as plaintext
 	}
 	for _, kv := range kvs {
 		if err := setGitConfig("sendemail."+kv[0], kv[1]); err != nil {

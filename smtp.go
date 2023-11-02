@@ -10,7 +10,13 @@ import (
 	"git.sr.ht/~emersion/pyonji/mailconfig"
 )
 
-func checkSMTPPassword(ctx context.Context, cfg *mailconfig.SMTP, username, password string) error {
+type smtpConfig struct {
+	mailconfig.SMTP
+	Username string
+	Password string
+}
+
+func (cfg *smtpConfig) check(ctx context.Context) error {
 	addr := fmt.Sprintf("%v:%v", cfg.Hostname, cfg.Port)
 
 	var (
@@ -30,5 +36,5 @@ func checkSMTPPassword(ctx context.Context, cfg *mailconfig.SMTP, username, pass
 	}
 	defer c.Close()
 
-	return c.Auth(sasl.NewPlainClient("", username, password))
+	return c.Auth(sasl.NewPlainClient("", cfg.Username, cfg.Password))
 }

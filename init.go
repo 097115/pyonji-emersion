@@ -25,11 +25,10 @@ type initModel struct {
 	passwordInput textinput.Model
 	spinner       spinner.Model
 
+	smtpConfig       smtpConfig
 	discovering      bool
-	email            string
 	showPassword     bool
 	checkingPassword bool
-	smtpConfig       *mailconfig.SMTP
 	errMsg           string
 }
 
@@ -86,7 +85,7 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case *mailconfig.SMTP:
 		m.discovering = false
-		m.smtpConfig = msg
+		m.smtpConfig.SMTP = *msg
 		m.showPassword = true
 		m.passwordInput.Focus()
 	case passwordCheckResult:
@@ -95,7 +94,7 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.errMsg = msg.err.Error()
 			m.passwordInput.Focus()
 		} else {
-			if err := saveGitSendEmailConfig(m.smtpConfig, m.email, m.passwordInput.Value()); err != nil {
+			if err := saveGitSendEmailConfig(&m.smtpConfig); err != nil {
 				log.Fatal(err)
 			}
 			return m.quit()
@@ -151,10 +150,10 @@ func (m initModel) submitEmail() (tea.Model, tea.Cmd) {
 
 	m.emailInput.Blur()
 	m.discovering = true
-	m.email = addr.Address
+	m.smtpConfig.Username = addr.Address
 
 	return m, func() tea.Msg {
-		cfg, err := mailconfig.DiscoverSMTP(m.ctx, m.email)
+		cfg, err := mailconfig.DiscoverSMTP(m.ctx, addr.Address)
 		if err != nil {
 			return err
 		}
@@ -165,9 +164,10 @@ func (m initModel) submitEmail() (tea.Model, tea.Cmd) {
 func (m initModel) submitPassword() (tea.Model, tea.Cmd) {
 	m.checkingPassword = true
 	m.passwordInput.Blur()
+	m.smtpConfig.Password = m.passwordInput.Value()
 
 	return m, func() tea.Msg {
-		err := checkSMTPPassword(m.ctx, m.smtpConfig, m.email, m.passwordInput.Value())
+		err := m.smtpConfig.check(m.ctx)
 		return passwordCheckResult{err}
 	}
 }
