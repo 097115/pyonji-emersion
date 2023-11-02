@@ -25,12 +25,11 @@ type initModel struct {
 	passwordInput textinput.Model
 	spinner       spinner.Model
 
-	smtpConfig       smtpConfig
-	discovering      bool
-	showPassword     bool
-	checkingPassword bool
-	done             bool
-	errMsg           string
+	smtpConfig   smtpConfig
+	showPassword bool
+	done         bool
+	loadingMsg   string
+	errMsg       string
 }
 
 func initialInitModel(ctx context.Context) initModel {
@@ -85,12 +84,12 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 	case *mailconfig.SMTP:
-		m.discovering = false
+		m.loadingMsg = ""
 		m.smtpConfig.SMTP = *msg
 		m.showPassword = true
 		m.passwordInput.Focus()
 	case passwordCheckResult:
-		m.checkingPassword = false
+		m.loadingMsg = ""
 		if msg.err != nil {
 			m.errMsg = msg.err.Error()
 			m.passwordInput.Focus()
@@ -120,14 +119,11 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m initModel) View() string {
 	var sb strings.Builder
 	sb.WriteString(m.emailInput.View() + "\n")
-	if m.discovering {
-		sb.WriteString(m.spinner.View() + "Checking mail server...\n")
-	}
 	if m.showPassword {
 		sb.WriteString(m.passwordInput.View() + "\n")
 	}
-	if m.checkingPassword {
-		sb.WriteString(m.spinner.View() + "Checking password...\n")
+	if m.loadingMsg != "" {
+		sb.WriteString(m.spinner.View() + m.loadingMsg + "\n")
 	}
 	if m.errMsg != "" {
 		sb.WriteString(errorStyle.Render("× "+m.errMsg) + "\n")
@@ -139,8 +135,7 @@ func (m initModel) View() string {
 }
 
 func (m initModel) quit() (tea.Model, tea.Cmd) {
-	m.discovering = false
-	m.checkingPassword = false
+	m.loadingMsg = ""
 	m.emailInput.Blur()
 	m.passwordInput.Blur()
 	return m, tea.Quit
@@ -154,7 +149,7 @@ func (m initModel) submitEmail() (tea.Model, tea.Cmd) {
 	}
 
 	m.emailInput.Blur()
-	m.discovering = true
+	m.loadingMsg = "Checking mail server..."
 	m.smtpConfig.Username = addr.Address
 
 	return m, func() tea.Msg {
@@ -167,8 +162,8 @@ func (m initModel) submitEmail() (tea.Model, tea.Cmd) {
 }
 
 func (m initModel) submitPassword() (tea.Model, tea.Cmd) {
-	m.checkingPassword = true
 	m.passwordInput.Blur()
+	m.loadingMsg = "Checking password..."
 	m.smtpConfig.Password = m.passwordInput.Value()
 
 	return m, func() tea.Msg {
