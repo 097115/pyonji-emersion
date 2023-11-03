@@ -213,6 +213,7 @@ func submitPatches(ctx context.Context, baseBranch string, cfg *smtpConfig, to s
 	if err != nil {
 		return err
 	}
+	_, fromHostname, _ := strings.Cut(from, "@")
 
 	patches, err := formatGitPatches(ctx, baseBranch)
 	if err != nil {
@@ -225,8 +226,17 @@ func submitPatches(ctx context.Context, baseBranch string, cfg *smtpConfig, to s
 	}
 	defer c.Close()
 
+	var firstMsgID string
 	for _, patch := range patches {
 		patch.header.SetAddressList("To", []*mail.Address{{Address: to}})
+		if err := patch.header.GenerateMessageIDWithHostname(fromHostname); err != nil {
+			return err
+		}
+		if firstMsgID == "" {
+			firstMsgID, _ = patch.header.MessageID()
+		} else {
+			patch.header.SetMsgIDList("In-Reply-To", []string{firstMsgID})
+		}
 
 		err := c.SendMail(from, []string{to}, bytes.NewReader(patch.Bytes()))
 		if err != nil {

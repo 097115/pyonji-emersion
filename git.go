@@ -145,7 +145,7 @@ func (p *patch) Bytes() []byte {
 }
 
 func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
-	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--thread", "--base="+baseBranch, baseBranch+"..")
+	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--base="+baseBranch, baseBranch+"..")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
