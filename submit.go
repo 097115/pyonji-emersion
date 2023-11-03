@@ -22,6 +22,21 @@ type submission struct {
 
 type submissionComplete struct{}
 
+type submitState int
+
+const (
+	submitStateTo submitState = iota
+	submitStateConfirm
+)
+
+var (
+	labelStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	activeLabelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("99"))
+
+	activeTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
+	textStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("247"))
+)
+
 type submitModel struct {
 	ctx        context.Context
 	smtpConfig *smtpConfig
@@ -29,17 +44,15 @@ type submitModel struct {
 	spinner spinner.Model
 	to      textinput.Model
 
+	state      submitState
 	baseBranch string
-	submission submission
+	commits    []logCommit
 	loadingMsg string
 	errMsg     string
 	done       bool
 }
 
 func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel {
-	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	textStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("247"))
-
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -71,9 +84,22 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter:
-			m.loadingMsg = "Submitting patches..."
-			return m, func() tea.Msg {
-				return submitPatches(m.ctx, m.baseBranch, m.smtpConfig, &m.submission)
+			switch m.state {
+			case submitStateTo:
+				m = m.setState(submitStateConfirm)
+			case submitStateConfirm:
+				m.loadingMsg = "Submitting patches..."
+				return m, func() tea.Msg {
+					return submitPatches(m.ctx, m.baseBranch, m.smtpConfig, m.to.Value())
+				}
+			}
+		case tea.KeyUp:
+			if m.state > 0 {
+				m = m.setState(m.state - 1)
+			}
+		case tea.KeyDown:
+			if m.state < submitStateConfirm {
+				m = m.setState(m.state + 1)
 			}
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
@@ -82,9 +108,14 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 	case submission:
-		m.submission = msg
 		m.loadingMsg = ""
-		m.to.SetValue(msg.to.Address)
+		m.commits = msg.commits
+		if msg.to != nil {
+			m.to.SetValue(msg.to.Address)
+			m = m.setState(submitStateConfirm)
+		} else {
+			m = m.setState(submitStateTo)
+		}
 	case submissionComplete:
 		m.loadingMsg = ""
 		m.done = true
@@ -94,7 +125,9 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.errMsg = msg.Error()
 		return m, tea.Quit
 	}
-	return m, nil
+
+	m.to, cmd = m.to.Update(msg)
+	return m, cmd
 }
 
 func (m submitModel) View() string {
@@ -107,12 +140,16 @@ func (m submitModel) View() string {
 	sb.WriteString(m.to.View() + "\n")
 	sb.WriteString("\n")
 
-	sb.WriteString(buttonActiveStyle.Render("Submit") + "\n")
+	style := buttonStyle
+	if m.state == submitStateConfirm {
+		style = buttonActiveStyle
+	}
+	sb.WriteString(style.Render("Submit") + "\n")
 	sb.WriteString("\n")
 
-	if len(m.submission.commits) > 0 {
-		sb.WriteString(pluralize("commit", len(m.submission.commits)) + "\n")
-		for _, commit := range m.submission.commits {
+	if len(m.commits) > 0 {
+		sb.WriteString(pluralize("commit", len(m.commits)) + "\n")
+		for _, commit := range m.commits {
 			sb.WriteString(hashStyle.Render(commit.Hash) + " " + commit.Subject + "\n")
 		}
 	} else if m.errMsg == "" {
@@ -129,13 +166,25 @@ func (m submitModel) View() string {
 	return lipgloss.NewStyle().Padding(1).Render(sb.String())
 }
 
+func (m submitModel) setState(state submitState) submitModel {
+	m.to.Blur()
+	m.to.PromptStyle = labelStyle
+	m.to.TextStyle = textStyle
+
+	m.state = state
+	switch state {
+	case submitStateTo:
+		m.to.Focus()
+		m.to.PromptStyle = activeLabelStyle
+		m.to.TextStyle = activeTextStyle
+	}
+	return m
+}
+
 func loadSubmission(ctx context.Context, baseBranch string) tea.Msg {
 	to, err := loadGitSendEmailTo()
 	if err != nil {
 		return err
-	} else if to == nil {
-		// TODO: ask for email addr & save it
-		return fmt.Errorf("missing sendemail.to")
 	}
 
 	commits, err := loadGitLog(ctx, baseBranch+"..")
@@ -146,7 +195,7 @@ func loadSubmission(ctx context.Context, baseBranch string) tea.Msg {
 	return submission{to: to, commits: commits}
 }
 
-func submitPatches(ctx context.Context, baseBranch string, cfg *smtpConfig, s *submission) tea.Msg {
+func submitPatches(ctx context.Context, baseBranch string, cfg *smtpConfig, to string) tea.Msg {
 	from, err := getGitConfig("user.email")
 	if err != nil {
 		return err
@@ -164,8 +213,7 @@ func submitPatches(ctx context.Context, baseBranch string, cfg *smtpConfig, s *s
 	defer c.Close()
 
 	for _, patch := range patches {
-		to := []string{s.to.Address}
-		err := c.SendMail(from, to, bytes.NewReader(patch))
+		err := c.SendMail(from, []string{to}, bytes.NewReader(patch))
 		if err != nil {
 			return err
 		}
