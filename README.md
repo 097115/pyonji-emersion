@@ -10,3 +10,9 @@ An easy-to-use tool to send e-mail patches.
 - No amnesia: the last version, cover letter, and other settings are saved
   on-disk. No need to manually pass `-v2` when sending a new version. Your
   cover letter is not lost if the network is flaky.
+
+# License
+
+GPLv3 only, see LICENSE.
+
+Copyright © 2023 Simon Ser
