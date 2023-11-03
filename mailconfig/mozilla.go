@@ -20,7 +20,7 @@ type mozillaConfig struct {
 			Port       string            `xml:"port"`
 			SocketType mozillaSocketType `xml:"socketType"`
 			Username   string            `xml:"username"`
-			Auth       mozillaAuth       `xml:"authentication"`
+			Auth       []mozillaAuth     `xml:"authentication"`
 		} `xml:"outgoingServer"`
 	} `xml:"emailProvider"`
 }
@@ -74,7 +74,18 @@ func (mozillaProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP,
 
 	var startTLSCfg *SMTP
 	for _, srv := range data.EmailProvider.OutgoingServer {
-		if srv.Type != "smtp" || srv.Auth != mozillaAuthPasswordCleartext {
+		if srv.Type != "smtp" {
+			continue
+		}
+
+		authSupported := false
+		for _, auth := range srv.Auth {
+			if auth == mozillaAuthPasswordCleartext {
+				authSupported = true
+				break
+			}
+		}
+		if !authSupported {
 			continue
 		}
 
