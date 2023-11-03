@@ -137,6 +137,8 @@ func (m submitModel) View() string {
 
 	var sb strings.Builder
 
+	fmt.Fprintf(&sb, "%v %v\n", labelStyle.Render("Base"), textStyle.Render(m.baseBranch))
+
 	sb.WriteString(m.to.View() + "\n")
 	sb.WriteString("\n")
 
