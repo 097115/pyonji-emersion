@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -8,7 +10,9 @@ import (
 	"strings"
 
 	"github.com/emersion/go-mbox"
+	"github.com/emersion/go-message"
 	"github.com/emersion/go-message/mail"
+	"github.com/emersion/go-message/textproto"
 )
 
 func getGitConfig(key string) (string, error) {
@@ -128,7 +132,19 @@ func loadGitLog(ctx context.Context, revRange string) ([]logCommit, error) {
 	return log, nil
 }
 
-func formatGitPatches(ctx context.Context, baseBranch string) ([][]byte, error) {
+type patch struct {
+	header mail.Header
+	body   []byte
+}
+
+func (p *patch) Bytes() []byte {
+	var buf bytes.Buffer
+	textproto.WriteHeader(&buf, p.header.Header.Header)
+	buf.Write(p.body)
+	return buf.Bytes()
+}
+
+func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
 	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--thread", "--base="+baseBranch, baseBranch+"..")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -138,7 +154,7 @@ func formatGitPatches(ctx context.Context, baseBranch string) ([][]byte, error) 
 		return nil, err
 	}
 
-	var patches [][]byte
+	var patches []patch
 	mr := mbox.NewReader(stdout)
 	for {
 		r, err := mr.NextMessage()
@@ -148,12 +164,21 @@ func formatGitPatches(ctx context.Context, baseBranch string) ([][]byte, error) 
 			return nil, err
 		}
 
-		b, err := io.ReadAll(r)
+		br := bufio.NewReader(r)
+		header, err := textproto.ReadHeader(br)
 		if err != nil {
 			return nil, err
 		}
 
-		patches = append(patches, b)
+		b, err := io.ReadAll(br)
+		if err != nil {
+			return nil, err
+		}
+
+		patches = append(patches, patch{
+			header: mail.Header{message.Header{header}},
+			body:   b,
+		})
 	}
 
 	if err := cmd.Wait(); err != nil {
