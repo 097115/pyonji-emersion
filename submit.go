@@ -88,6 +88,9 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case submitStateTo:
 				m = m.setState(submitStateConfirm)
 			case submitStateConfirm:
+				if !m.canSubmit() {
+					break
+				}
 				m.loadingMsg = "Submitting patches..."
 				return m, func() tea.Msg {
 					return submitPatches(m.ctx, m.baseBranch, m.smtpConfig, m.to.Value())
@@ -144,7 +147,11 @@ func (m submitModel) View() string {
 
 	style := buttonStyle
 	if m.state == submitStateConfirm {
-		style = buttonActiveStyle
+		if m.canSubmit() {
+			style = buttonActiveStyle
+		} else {
+			style = buttonInactiveStyle
+		}
 	}
 	sb.WriteString(style.Render("Submit") + "\n")
 	sb.WriteString("\n")
@@ -181,6 +188,10 @@ func (m submitModel) setState(state submitState) submitModel {
 		m.to.TextStyle = activeTextStyle
 	}
 	return m
+}
+
+func (m submitModel) canSubmit() bool {
+	return len(m.commits) > 0 && checkAddress(m.to.Value())
 }
 
 func loadSubmission(ctx context.Context, baseBranch string) tea.Msg {
@@ -230,4 +241,9 @@ func pluralize(name string, n int) string {
 		s += "s"
 	}
 	return s
+}
+
+func checkAddress(addr string) bool {
+	_, err := mail.ParseAddress("<" + addr + ">")
+	return err == nil
 }

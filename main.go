@@ -41,6 +41,7 @@ var (
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
 	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("202"))
 
-	buttonStyle       = lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(lipgloss.Color("241")).Padding(0, 2)
-	buttonActiveStyle = lipgloss.NewStyle().Background(lipgloss.Color("99")).Foreground(lipgloss.Color("#ECFD66")).Padding(0, 2)
+	buttonStyle         = lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(lipgloss.Color("241")).Padding(0, 2)
+	buttonActiveStyle   = lipgloss.NewStyle().Background(lipgloss.Color("99")).Foreground(lipgloss.Color("#ECFD66")).Padding(0, 2)
+	buttonInactiveStyle = lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(lipgloss.Color("247")).Padding(0, 2)
 )
