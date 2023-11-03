@@ -226,6 +226,8 @@ func submitPatches(ctx context.Context, baseBranch string, cfg *smtpConfig, to s
 	defer c.Close()
 
 	for _, patch := range patches {
+		patch.header.SetAddressList("To", []*mail.Address{{Address: to}})
+
 		err := c.SendMail(from, []string{to}, bytes.NewReader(patch.Bytes()))
 		if err != nil {
 			return err
