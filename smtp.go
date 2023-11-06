@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"net"
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
@@ -26,7 +26,7 @@ func (cfg *smtpConfig) check(ctx context.Context) error {
 }
 
 func (cfg *smtpConfig) dialAndAuth(ctx context.Context) (*smtp.Client, error) {
-	addr := fmt.Sprintf("%v:%v", cfg.Hostname, cfg.Port)
+	addr := net.JoinHostPort(cfg.Hostname, cfg.Port)
 
 	var (
 		c   *smtp.Client
