@@ -165,7 +165,12 @@ func (m submitModel) View() string {
 
 	if len(m.commits) > 0 {
 		sb.WriteString(pluralize("commit", len(m.commits)) + "\n")
-		for _, commit := range m.commits {
+
+		n := len(m.commits)
+		if n > 10 {
+			n = 10
+		}
+		for _, commit := range m.commits[:n] {
 			sb.WriteString(hashStyle.Render(commit.Hash) + " " + commit.Subject + "\n")
 		}
 	} else if m.errMsg == "" {
