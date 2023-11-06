@@ -118,6 +118,7 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m initModel) View() string {
 	var sb strings.Builder
+	sb.WriteString("This is the first time pyonji is run. Please enter your e-mail account credentials.\n")
 	sb.WriteString(m.emailInput.View() + "\n")
 	if m.showPassword {
 		sb.WriteString(m.passwordInput.View() + "\n")
