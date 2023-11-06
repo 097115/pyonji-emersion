@@ -26,6 +26,7 @@ type initModel struct {
 	spinner       spinner.Model
 
 	smtpConfig   smtpConfig
+	passwordHint string
 	showPassword bool
 	done         bool
 	loadingMsg   string
@@ -87,6 +88,7 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loadingMsg = ""
 		m.smtpConfig.SMTP = *msg
 		m.showPassword = true
+		m.passwordHint = mailconfig.GetVendorPasswordHint(m.emailInput.Value(), msg.Hostname)
 		m.passwordInput.Focus()
 	case passwordCheckResult:
 		m.loadingMsg = ""
@@ -121,6 +123,9 @@ func (m initModel) View() string {
 	sb.WriteString("This is the first time pyonji is run. Please enter your e-mail account credentials.\n")
 	sb.WriteString(m.emailInput.View() + "\n")
 	if m.showPassword {
+		if m.passwordHint != "" {
+			sb.WriteString(m.passwordHint + "\n")
+		}
 		sb.WriteString(m.passwordInput.View() + "\n")
 	}
 	if m.loadingMsg != "" {
