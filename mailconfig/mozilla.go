@@ -3,7 +3,9 @@ package mailconfig
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -38,16 +40,7 @@ const (
 	mozillaAuthPasswordCleartext mozillaAuth = "password-cleartext"
 )
 
-type mozillaProvider struct{}
-
-var _ provider = mozillaProvider{}
-
-// DiscoverSMTP looks up the Mozilla ISPDB. See:
-// https://wiki.mozilla.org/Thunderbird:Autoconfiguration
-func (mozillaProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
-	_, domain, _ := strings.Cut(address, "@")
-
-	url := mozillaISPDB + domain
+func discoverMozilla(ctx context.Context, url string) (*SMTP, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -108,4 +101,30 @@ func (mozillaProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP,
 	}
 
 	return nil, ErrNotFound
+}
+
+type mozillaISPDBProvider struct{}
+
+var _ provider = mozillaISPDBProvider{}
+
+// DiscoverSMTP looks up the Mozilla ISPDB. See:
+// https://wiki.mozilla.org/Thunderbird:Autoconfiguration
+func (mozillaISPDBProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
+	_, domain, _ := strings.Cut(address, "@")
+	return discoverMozilla(ctx, mozillaISPDB+domain)
+}
+
+type mozillaSubdomainProvider struct{}
+
+var _ provider = mozillaSubdomainProvider{}
+
+func (mozillaSubdomainProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
+	_, domain, _ := strings.Cut(address, "@")
+	url := "https://autoconfig." + domain + "/mail/config-v1.1.xml"
+	cfg, err := discoverMozilla(ctx, url)
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+		return nil, ErrNotFound
+	}
+	return cfg, err
 }
