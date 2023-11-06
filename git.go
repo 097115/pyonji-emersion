@@ -187,3 +187,20 @@ func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
 
 	return patches, nil
 }
+
+func findGitDefaultBranch() string {
+	// TODO: find a better way to get the default branch
+
+	for _, name := range []string{"main", "master"} {
+		if checkGitBranch(name) {
+			return name
+		}
+	}
+
+	return ""
+}
+
+func checkGitBranch(name string) bool {
+	cmd := exec.Command("git", "rev-parse", "--verify", name)
+	return cmd.Run() == nil
+}

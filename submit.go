@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -53,6 +54,12 @@ type submitModel struct {
 }
 
 func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel {
+	defaultBranch := findGitDefaultBranch()
+	if defaultBranch == "" {
+		// TODO: allow user to pick
+		log.Fatal("failed to find base branch")
+	}
+
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -67,7 +74,7 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 		smtpConfig: smtpConfig,
 		spinner:    s,
 		to:         to,
-		baseBranch: "master", // TODO: find default branch
+		baseBranch: defaultBranch,
 		loadingMsg: "Loading submission...",
 	}
 }
