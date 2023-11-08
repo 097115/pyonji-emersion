@@ -307,7 +307,6 @@ func loadSubmissionConfig() (*submissionConfig, error) {
 func saveSubmissionConfig(cfg *submissionConfig) error {
 	branch := findGitCurrentBranch()
 	if branch == "" {
-		panic("abc")
 		return nil
 	}
 
