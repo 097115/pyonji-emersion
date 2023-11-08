@@ -11,6 +11,12 @@ An easy-to-use tool to send e-mail patches.
   on-disk. No need to manually pass `-v2` when sending a new version. Your
   cover letter is not lost if the network is flaky.
 
+# Usage
+
+Create a branch, commit changes, and then type `pyonji`. pyonji will ask for
+your e-mail address and password the first time it's used, and will then
+display an interface to submit your patches.
+
 # License
 
 GPLv3 only, see LICENSE.
