@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -21,8 +22,9 @@ type submission struct {
 }
 
 type submissionConfig struct {
-	baseBranch string
-	to         string
+	baseBranch  string
+	to          string
+	rerollCount string
 }
 
 type submissionComplete struct{}
@@ -49,12 +51,13 @@ type submitModel struct {
 	spinner spinner.Model
 	to      textinput.Model
 
-	state      submitState
-	baseBranch string
-	commits    []logCommit
-	loadingMsg string
-	errMsg     string
-	done       bool
+	state       submitState
+	baseBranch  string
+	rerollCount string
+	commits     []logCommit
+	loadingMsg  string
+	errMsg      string
+	done        bool
 }
 
 func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel {
@@ -80,6 +83,11 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 		}
 	}
 
+	rerollCount, err := getNextRerollCount(cfg.rerollCount)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	state := submitStateConfirm
 	if cfg.to == "" {
 		state = submitStateTo
@@ -96,12 +104,13 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 	to.SetValue(cfg.to)
 
 	return submitModel{
-		ctx:        ctx,
-		smtpConfig: smtpConfig,
-		spinner:    s,
-		to:         to,
-		baseBranch: cfg.baseBranch,
-		loadingMsg: "Loading submission...",
+		ctx:         ctx,
+		smtpConfig:  smtpConfig,
+		spinner:     s,
+		to:          to,
+		baseBranch:  cfg.baseBranch,
+		rerollCount: rerollCount,
+		loadingMsg:  "Loading submission...",
 	}.setState(state)
 }
 
@@ -127,8 +136,9 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadingMsg = "Submitting patches..."
 				return m, func() tea.Msg {
 					cfg := submissionConfig{
-						to:         m.to.Value(),
-						baseBranch: m.baseBranch,
+						to:          m.to.Value(),
+						baseBranch:  m.baseBranch,
+						rerollCount: m.rerollCount,
 					}
 					return submitPatches(m.ctx, &cfg, m.smtpConfig)
 				}
@@ -172,6 +182,12 @@ func (m submitModel) View() string {
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "%v %v\n", labelStyle.Render("Base"), textStyle.Render(m.baseBranch))
+
+	version := m.rerollCount
+	if version == "" {
+		version = "1"
+	}
+	fmt.Fprintf(&sb, "%v %v\n", labelStyle.Render("Version"), textStyle.Render(version))
 
 	sb.WriteString(m.to.View() + "\n")
 	sb.WriteString("\n")
@@ -250,7 +266,7 @@ func submitPatches(ctx context.Context, submission *submissionConfig, smtp *smtp
 	}
 	_, fromHostname, _ := strings.Cut(from, "@")
 
-	patches, err := formatGitPatches(ctx, submission.baseBranch)
+	patches, err := formatGitPatches(ctx, submission.baseBranch, submission.rerollCount)
 	if err != nil {
 		return err
 	}
@@ -279,6 +295,10 @@ func submitPatches(ctx context.Context, submission *submissionConfig, smtp *smtp
 		}
 	}
 
+	if err := saveLastSentHash(); err != nil {
+		return err
+	}
+
 	return submissionComplete{}
 }
 
@@ -290,8 +310,9 @@ func loadSubmissionConfig() (*submissionConfig, error) {
 
 	var cfg submissionConfig
 	entries := map[string]*string{
-		"pyonjito":   &cfg.to,
-		"pyonjibase": &cfg.baseBranch,
+		"pyonjito":          &cfg.to,
+		"pyonjibase":        &cfg.baseBranch,
+		"pyonjirerollcount": &cfg.rerollCount,
 	}
 	for k, ptr := range entries {
 		v, err := getGitConfig("branch." + branch + "." + k)
@@ -313,6 +334,7 @@ func saveSubmissionConfig(cfg *submissionConfig) error {
 	kvs := []struct{ k, v string }{
 		{"pyonjito", cfg.to},
 		{"pyonjibase", cfg.baseBranch},
+		{"pyonjirerollcount", cfg.rerollCount},
 	}
 	for _, kv := range kvs {
 		k := "branch." + branch + "." + kv.k
@@ -322,6 +344,53 @@ func saveSubmissionConfig(cfg *submissionConfig) error {
 	}
 
 	return nil
+}
+
+func getLastSentHash() string {
+	branch := findGitCurrentBranch()
+	if branch == "" {
+		return ""
+	}
+	commit, _ := getGitConfig("branch." + branch + ".pyonjilastsenthash")
+	return commit
+}
+
+func saveLastSentHash() error {
+	branch := findGitCurrentBranch()
+	if branch == "" {
+		return nil
+	}
+
+	commit, err := getGitCurrentCommit()
+	if err != nil {
+		return err
+	}
+
+	k := "branch." + branch + ".pyonjilastsenthash"
+	return setGitConfig(k, commit)
+}
+
+func getNextRerollCount(rerollCount string) (string, error) {
+	last := getLastSentHash()
+	if last == "" {
+		return rerollCount, nil
+	}
+
+	if cur, err := getGitCurrentCommit(); err != nil {
+		return "", err
+	} else if cur == last {
+		return rerollCount, nil
+	}
+
+	v := 1
+	if rerollCount != "" {
+		var err error
+		if v, err = strconv.Atoi(rerollCount); err != nil {
+			return "", fmt.Errorf("failed to parse reroll count: %v", err)
+		}
+	}
+
+	return strconv.Itoa(v + 1), nil
 }
 
 func pluralize(name string, n int) string {

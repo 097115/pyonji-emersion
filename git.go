@@ -158,13 +158,19 @@ func (p *patch) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
+func formatGitPatches(ctx context.Context, baseBranch, rerollCount string) ([]patch, error) {
 	baseCommit, err := getGitMergeBase(baseBranch, "HEAD")
 	if err != nil {
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--encode-email-headers", "--base="+baseCommit, baseBranch+"..")
+	args := []string{"format-patch", "--stdout", "--encode-email-headers"}
+	if rerollCount != "" {
+		args = append(args, "--reroll-count="+rerollCount)
+	}
+	args = append(args, "--base="+baseCommit, baseBranch+"..")
+
+	cmd := exec.CommandContext(ctx, "git", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to format Git patches: %v", err)
@@ -212,6 +218,15 @@ func getGitMergeBase(a, b string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to find merge base of %q and %q: %v", a, b, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func getGitCurrentCommit() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch current commit: %v", err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
