@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/mail"
 	"strings"
@@ -161,7 +162,7 @@ func (m initModel) submitEmail() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg {
 		cfg, err := mailconfig.DiscoverSMTP(m.ctx, addr.Address)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to discover e-mail server: %v", err)
 		}
 		return cfg
 	}

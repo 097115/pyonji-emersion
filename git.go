@@ -18,12 +18,18 @@ import (
 func getGitConfig(key string) (string, error) {
 	cmd := exec.Command("git", "config", "--default=", key)
 	b, err := cmd.Output()
-	return strings.TrimSpace(string(b)), err
+	if err != nil {
+		return "", fmt.Errorf("failed to get Git config %q: %v", key, err)
+	}
+	return strings.TrimSpace(string(b)), nil
 }
 
 func setGitConfig(key, value string) error {
 	cmd := exec.Command("git", "config", "--global", key, value)
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set Git config %q: %v", key, err)
+	}
+	return nil
 }
 
 func saveGitSendEmailConfig(cfg *smtpConfig) error {
@@ -148,10 +154,10 @@ func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
 	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--base="+baseBranch, baseBranch+"..")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to format Git patches: %v", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to format Git patches: %v", err)
 	}
 
 	var patches []patch
@@ -161,18 +167,18 @@ func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse Git patches mbox: %v", err)
 		}
 
 		br := bufio.NewReader(r)
 		header, err := textproto.ReadHeader(br)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse Git patch header: %v", err)
 		}
 
 		b, err := io.ReadAll(br)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read Git patch body: %v", err)
 		}
 
 		patches = append(patches, patch{
@@ -182,7 +188,7 @@ func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
 	}
 
 	if err := cmd.Wait(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to format Git patches: %v", err)
 	}
 
 	return patches, nil
