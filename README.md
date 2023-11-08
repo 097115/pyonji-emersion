@@ -17,8 +17,17 @@ Create a branch, commit changes, and then type `pyonji`. pyonji will ask for
 your e-mail address and password the first time it's used, and will then
 display an interface to submit your patches.
 
+# Contributing
+
+Send patches on the [mailing list], report bugs on the [issue tracker]. Discuss
+in [#emersion on Libera Chat].
+
 # License
 
 GPLv3 only, see LICENSE.
 
 Copyright © 2023 Simon Ser
+
+[mailing list]: https://lists.sr.ht/~emersion/public-inbox
+[issue tracker]: https://todo.sr.ht/~emersion/pyonji
+[#emersion on Libera Chat]: ircs://irc.libera.chat/#emersion
