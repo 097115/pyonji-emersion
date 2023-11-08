@@ -52,6 +52,7 @@ type submitModel struct {
 	to      textinput.Model
 
 	state       submitState
+	headBranch  string
 	baseBranch  string
 	rerollCount string
 	commits     []logCommit
@@ -61,9 +62,14 @@ type submitModel struct {
 }
 
 func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel {
-	cfg, err := loadSubmissionConfig()
-	if err != nil {
-		log.Fatal(err)
+	headBranch := findGitCurrentBranch()
+
+	cfg := new(submissionConfig)
+	if headBranch != "" {
+		var err error
+		if cfg, err = loadSubmissionConfig(headBranch); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	if cfg.baseBranch == "" {
@@ -83,7 +89,7 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 		}
 	}
 
-	rerollCount, err := getNextRerollCount(cfg.rerollCount)
+	rerollCount, err := getNextRerollCount(headBranch, cfg.rerollCount)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -108,6 +114,7 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 		smtpConfig:  smtpConfig,
 		spinner:     s,
 		to:          to,
+		headBranch:  headBranch,
 		baseBranch:  cfg.baseBranch,
 		rerollCount: rerollCount,
 		loadingMsg:  "Loading submission...",
@@ -140,7 +147,7 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						baseBranch:  m.baseBranch,
 						rerollCount: m.rerollCount,
 					}
-					return submitPatches(m.ctx, &cfg, m.smtpConfig)
+					return submitPatches(m.ctx, m.headBranch, &cfg, m.smtpConfig)
 				}
 			}
 		case tea.KeyUp:
@@ -255,8 +262,8 @@ func loadSubmission(ctx context.Context, baseBranch string) tea.Msg {
 	return submission{commits: commits}
 }
 
-func submitPatches(ctx context.Context, submission *submissionConfig, smtp *smtpConfig) tea.Msg {
-	if err := saveSubmissionConfig(submission); err != nil {
+func submitPatches(ctx context.Context, headBranch string, submission *submissionConfig, smtp *smtpConfig) tea.Msg {
+	if err := saveSubmissionConfig(headBranch, submission); err != nil {
 		return err
 	}
 
@@ -295,15 +302,14 @@ func submitPatches(ctx context.Context, submission *submissionConfig, smtp *smtp
 		}
 	}
 
-	if err := saveLastSentHash(); err != nil {
+	if err := saveLastSentHash(headBranch); err != nil {
 		return err
 	}
 
 	return submissionComplete{}
 }
 
-func loadSubmissionConfig() (*submissionConfig, error) {
-	branch := findGitCurrentBranch()
+func loadSubmissionConfig(branch string) (*submissionConfig, error) {
 	if branch == "" {
 		return &submissionConfig{}, nil
 	}
@@ -325,8 +331,7 @@ func loadSubmissionConfig() (*submissionConfig, error) {
 	return &cfg, nil
 }
 
-func saveSubmissionConfig(cfg *submissionConfig) error {
-	branch := findGitCurrentBranch()
+func saveSubmissionConfig(branch string, cfg *submissionConfig) error {
 	if branch == "" {
 		return nil
 	}
@@ -346,8 +351,7 @@ func saveSubmissionConfig(cfg *submissionConfig) error {
 	return nil
 }
 
-func getLastSentHash() string {
-	branch := findGitCurrentBranch()
+func getLastSentHash(branch string) string {
 	if branch == "" {
 		return ""
 	}
@@ -355,8 +359,7 @@ func getLastSentHash() string {
 	return commit
 }
 
-func saveLastSentHash() error {
-	branch := findGitCurrentBranch()
+func saveLastSentHash(branch string) error {
 	if branch == "" {
 		return nil
 	}
@@ -370,8 +373,8 @@ func saveLastSentHash() error {
 	return setGitConfig(k, commit)
 }
 
-func getNextRerollCount(rerollCount string) (string, error) {
-	last := getLastSentHash()
+func getNextRerollCount(branch, rerollCount string) (string, error) {
+	last := getLastSentHash(branch)
 	if last == "" {
 		return rerollCount, nil
 	}
