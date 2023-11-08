@@ -164,7 +164,7 @@ func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--base="+baseCommit, baseBranch+"..")
+	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--encode-email-headers", "--base="+baseCommit, baseBranch+"..")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to format Git patches: %v", err)
