@@ -159,7 +159,12 @@ func (p *patch) Bytes() []byte {
 }
 
 func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
-	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--base="+baseBranch, baseBranch+"..")
+	baseCommit, err := getGitMergeBase(baseBranch, "HEAD")
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.CommandContext(ctx, "git", "format-patch", "--stdout", "--base="+baseCommit, baseBranch+"..")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to format Git patches: %v", err)
@@ -200,6 +205,15 @@ func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
 	}
 
 	return patches, nil
+}
+
+func getGitMergeBase(a, b string) (string, error) {
+	cmd := exec.Command("git", "merge-base", a, b)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to find merge base of %q and %q: %v", a, b, err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func findGitCurrentBranch() string {
