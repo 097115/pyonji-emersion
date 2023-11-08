@@ -316,9 +316,9 @@ func loadSubmissionConfig(branch string) (*submissionConfig, error) {
 
 	var cfg submissionConfig
 	entries := map[string]*string{
-		"pyonjito":          &cfg.to,
-		"pyonjibase":        &cfg.baseBranch,
-		"pyonjirerollcount": &cfg.rerollCount,
+		"pyonjiTo":          &cfg.to,
+		"pyonjiBase":        &cfg.baseBranch,
+		"pyonjiRerollCount": &cfg.rerollCount,
 	}
 	for k, ptr := range entries {
 		v, err := getGitConfig("branch." + branch + "." + k)
@@ -337,9 +337,9 @@ func saveSubmissionConfig(branch string, cfg *submissionConfig) error {
 	}
 
 	kvs := []struct{ k, v string }{
-		{"pyonjito", cfg.to},
-		{"pyonjibase", cfg.baseBranch},
-		{"pyonjirerollcount", cfg.rerollCount},
+		{"pyonjiTo", cfg.to},
+		{"pyonjiBase", cfg.baseBranch},
+		{"pyonjiRerollCount", cfg.rerollCount},
 	}
 	for _, kv := range kvs {
 		k := "branch." + branch + "." + kv.k
@@ -355,7 +355,7 @@ func getLastSentHash(branch string) string {
 	if branch == "" {
 		return ""
 	}
-	commit, _ := getGitConfig("branch." + branch + ".pyonjilastsenthash")
+	commit, _ := getGitConfig("branch." + branch + ".pyonjiLastSentHash")
 	return commit
 }
 
@@ -369,7 +369,7 @@ func saveLastSentHash(branch string) error {
 		return err
 	}
 
-	k := "branch." + branch + ".pyonjilastsenthash"
+	k := "branch." + branch + ".pyonjiLastSentHash"
 	return setGitConfig(k, commit)
 }
 
