@@ -25,9 +25,17 @@ func getGitConfig(key string) (string, error) {
 }
 
 func setGitConfig(key, value string) error {
-	cmd := exec.Command("git", "config", "--global", key, value)
+	cmd := exec.Command("git", "config", key, value)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to set Git config %q: %v", key, err)
+	}
+	return nil
+}
+
+func setGitGlobalConfig(key, value string) error {
+	cmd := exec.Command("git", "config", "--global", key, value)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set Git global config %q: %v", key, err)
 	}
 	return nil
 }
@@ -46,7 +54,7 @@ func saveGitSendEmailConfig(cfg *smtpConfig) error {
 		{"smtpPass", cfg.Password}, // TODO: do not store as plaintext
 	}
 	for _, kv := range kvs {
-		if err := setGitConfig("sendemail."+kv[0], kv[1]); err != nil {
+		if err := setGitGlobalConfig("sendemail."+kv[0], kv[1]); err != nil {
 			return err
 		}
 	}
@@ -192,6 +200,15 @@ func formatGitPatches(ctx context.Context, baseBranch string) ([]patch, error) {
 	}
 
 	return patches, nil
+}
+
+func findGitCurrentBranch() string {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	b, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 func findGitDefaultBranch() string {

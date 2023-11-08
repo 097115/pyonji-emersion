@@ -17,8 +17,12 @@ import (
 var hashStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 
 type submission struct {
-	to      *mail.Address
 	commits []logCommit
+}
+
+type submissionConfig struct {
+	baseBranch string
+	to         string
 }
 
 type submissionComplete struct{}
@@ -54,10 +58,31 @@ type submitModel struct {
 }
 
 func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel {
-	defaultBranch := findGitDefaultBranch()
-	if defaultBranch == "" {
+	cfg, err := loadSubmissionConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if cfg.baseBranch == "" {
+		cfg.baseBranch = findGitDefaultBranch()
+	}
+	if cfg.baseBranch == "" {
 		// TODO: allow user to pick
 		log.Fatal("failed to find base branch")
+	}
+
+	if cfg.to == "" {
+		to, err := loadGitSendEmailTo()
+		if err != nil {
+			log.Fatal(err)
+		} else if to != nil {
+			cfg.to = to.Address
+		}
+	}
+
+	state := submitStateConfirm
+	if cfg.to == "" {
+		state = submitStateTo
 	}
 
 	s := spinner.New()
@@ -68,15 +93,16 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 	to.Prompt = "To "
 	to.PromptStyle = labelStyle.Copy()
 	to.TextStyle = textStyle.Copy()
+	to.SetValue(cfg.to)
 
 	return submitModel{
 		ctx:        ctx,
 		smtpConfig: smtpConfig,
 		spinner:    s,
 		to:         to,
-		baseBranch: defaultBranch,
+		baseBranch: cfg.baseBranch,
 		loadingMsg: "Loading submission...",
-	}
+	}.setState(state)
 }
 
 func (m submitModel) Init() tea.Cmd {
@@ -100,7 +126,11 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.loadingMsg = "Submitting patches..."
 				return m, func() tea.Msg {
-					return submitPatches(m.ctx, m.baseBranch, m.smtpConfig, m.to.Value())
+					cfg := submissionConfig{
+						to:         m.to.Value(),
+						baseBranch: m.baseBranch,
+					}
+					return submitPatches(m.ctx, &cfg, m.smtpConfig)
 				}
 			}
 		case tea.KeyUp:
@@ -120,12 +150,6 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case submission:
 		m.loadingMsg = ""
 		m.commits = msg.commits
-		if msg.to != nil {
-			m.to.SetValue(msg.to.Address)
-			m = m.setState(submitStateConfirm)
-		} else {
-			m = m.setState(submitStateTo)
-		}
 	case submissionComplete:
 		m.loadingMsg = ""
 		m.done = true
@@ -207,32 +231,31 @@ func (m submitModel) canSubmit() bool {
 }
 
 func loadSubmission(ctx context.Context, baseBranch string) tea.Msg {
-	to, err := loadGitSendEmailTo()
-	if err != nil {
-		return err
-	}
-
 	commits, err := loadGitLog(ctx, baseBranch+"..")
 	if err != nil {
 		return err
 	}
 
-	return submission{to: to, commits: commits}
+	return submission{commits: commits}
 }
 
-func submitPatches(ctx context.Context, baseBranch string, cfg *smtpConfig, to string) tea.Msg {
+func submitPatches(ctx context.Context, submission *submissionConfig, smtp *smtpConfig) tea.Msg {
+	if err := saveSubmissionConfig(submission); err != nil {
+		return err
+	}
+
 	from, err := getGitConfig("user.email")
 	if err != nil {
 		return err
 	}
 	_, fromHostname, _ := strings.Cut(from, "@")
 
-	patches, err := formatGitPatches(ctx, baseBranch)
+	patches, err := formatGitPatches(ctx, submission.baseBranch)
 	if err != nil {
 		return err
 	}
 
-	c, err := cfg.dialAndAuth(ctx)
+	c, err := smtp.dialAndAuth(ctx)
 	if err != nil {
 		return err
 	}
@@ -240,7 +263,7 @@ func submitPatches(ctx context.Context, baseBranch string, cfg *smtpConfig, to s
 
 	var firstMsgID string
 	for _, patch := range patches {
-		patch.header.SetAddressList("To", []*mail.Address{{Address: to}})
+		patch.header.SetAddressList("To", []*mail.Address{{Address: submission.to}})
 		if err := patch.header.GenerateMessageIDWithHostname(fromHostname); err != nil {
 			return err
 		}
@@ -250,13 +273,56 @@ func submitPatches(ctx context.Context, baseBranch string, cfg *smtpConfig, to s
 			patch.header.SetMsgIDList("In-Reply-To", []string{firstMsgID})
 		}
 
-		err := c.SendMail(from, []string{to}, bytes.NewReader(patch.Bytes()))
+		err := c.SendMail(from, []string{submission.to}, bytes.NewReader(patch.Bytes()))
 		if err != nil {
 			return err
 		}
 	}
 
 	return submissionComplete{}
+}
+
+func loadSubmissionConfig() (*submissionConfig, error) {
+	branch := findGitCurrentBranch()
+	if branch == "" {
+		return &submissionConfig{}, nil
+	}
+
+	var cfg submissionConfig
+	entries := map[string]*string{
+		"pyonjito":   &cfg.to,
+		"pyonjibase": &cfg.baseBranch,
+	}
+	for k, ptr := range entries {
+		v, err := getGitConfig("branch." + branch + "." + k)
+		if err != nil {
+			return nil, err
+		}
+		*ptr = v
+	}
+
+	return &cfg, nil
+}
+
+func saveSubmissionConfig(cfg *submissionConfig) error {
+	branch := findGitCurrentBranch()
+	if branch == "" {
+		panic("abc")
+		return nil
+	}
+
+	kvs := []struct{ k, v string }{
+		{"pyonjito", cfg.to},
+		{"pyonjibase", cfg.baseBranch},
+	}
+	for _, kv := range kvs {
+		k := "branch." + branch + "." + kv.k
+		if err := setGitConfig(k, kv.v); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func pluralize(name string, n int) string {
