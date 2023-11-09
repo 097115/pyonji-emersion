@@ -142,6 +142,9 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if msg.Type != tea.KeyCtrlC && m.loadingMsg != "" {
+			break
+		}
 		switch msg.Type {
 		case tea.KeyEnter:
 			switch m.state {
@@ -211,7 +214,7 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m submitModel) View() string {
-	if m.loadingMsg != "" {
+	if m.loadingMsg != "" && len(m.commits) == 0 {
 		return m.spinner.View() + m.loadingMsg + "\n"
 	}
 
@@ -241,12 +244,19 @@ func (m submitModel) View() string {
 
 	sb.WriteString("\n")
 
-	btn := button{
-		Label:    "Submit",
-		Active:   m.state == submitStateConfirm,
-		Disabled: !m.canSubmit(),
+	if m.loadingMsg != "" {
+		sb.WriteString(m.spinner.View() + m.loadingMsg + "\n")
+	} else if m.done {
+		sb.WriteString(successStyle.Render("✓ Patches sent\n"))
+	} else {
+		btn := button{
+			Label:    "Submit",
+			Active:   m.state == submitStateConfirm,
+			Disabled: !m.canSubmit(),
+		}
+		sb.WriteString(btn.View() + "\n")
 	}
-	sb.WriteString(btn.View() + "\n")
+
 	sb.WriteString("\n")
 
 	if len(m.commits) > 0 {
@@ -265,9 +275,6 @@ func (m submitModel) View() string {
 
 	if m.errMsg != "" {
 		sb.WriteString(errorStyle.Render("× " + m.errMsg + "\n"))
-	}
-	if m.done {
-		sb.WriteString(successStyle.Render("✓ Patches sent\n"))
 	}
 
 	return lipgloss.NewStyle().Padding(1).Render(sb.String())
