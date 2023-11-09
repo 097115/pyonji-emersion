@@ -185,15 +185,18 @@ func (m submitModel) View() string {
 
 	var sb strings.Builder
 
-	fmt.Fprintf(&sb, "%v %v\n", labelStyle.Render("Base"), textStyle.Render(m.baseBranch))
+	field := formField{Label: "Base", Text: m.baseBranch}
+	sb.WriteString(field.View() + "\n")
 
 	version := m.rerollCount
 	if version == "" {
 		version = "1"
 	}
-	fmt.Fprintf(&sb, "%v %v\n", labelStyle.Render("Version"), textStyle.Render(version))
+	field = formField{Label: "Version", Text: version}
+	sb.WriteString(field.View() + "\n")
 
 	sb.WriteString(m.to.View() + "\n")
+
 	sb.WriteString("\n")
 
 	style := buttonStyle
@@ -404,4 +407,17 @@ func pluralize(name string, n int) string {
 func checkAddress(addr string) bool {
 	_, err := mail.ParseAddress("<" + addr + ">")
 	return err == nil
+}
+
+type formField struct {
+	Label, Text string
+	Active      bool
+}
+
+func (f *formField) View() string {
+	labelStyle, textStyle := labelStyle, textStyle
+	if f.Active {
+		labelStyle, textStyle = activeLabelStyle, activeTextStyle
+	}
+	return fmt.Sprintf("%v %v", labelStyle.Render(f.Label), textStyle.Render(f.Text))
 }
