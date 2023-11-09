@@ -64,12 +64,9 @@ type submitModel struct {
 func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel {
 	headBranch := findGitCurrentBranch()
 
-	cfg := new(submissionConfig)
-	if headBranch != "" {
-		var err error
-		if cfg, err = loadSubmissionConfig(headBranch); err != nil {
-			log.Fatal(err)
-		}
+	cfg, err := loadSubmissionConfig(headBranch)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	if cfg.baseBranch == "" {
