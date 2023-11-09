@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/emersion/go-message/mail"
+	"github.com/muesli/reflow/truncate"
 )
 
 var hashStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
@@ -27,12 +29,17 @@ type submissionConfig struct {
 	rerollCount string
 }
 
+type coverLetterUpdated struct {
+	coverLetter string
+}
+
 type submissionComplete struct{}
 
 type submitState int
 
 const (
 	submitStateTo submitState = iota
+	submitStateCoverLetter
 	submitStateConfirm
 )
 
@@ -55,6 +62,7 @@ type submitModel struct {
 	headBranch  string
 	baseBranch  string
 	rerollCount string
+	coverLetter string
 	commits     []logCommit
 	loadingMsg  string
 	errMsg      string
@@ -91,6 +99,11 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 		log.Fatal(err)
 	}
 
+	coverLetter, err := loadGitBranchDescription(headBranch)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	state := submitStateConfirm
 	if cfg.to == "" {
 		state = submitStateTo
@@ -114,6 +127,7 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 		headBranch:  headBranch,
 		baseBranch:  cfg.baseBranch,
 		rerollCount: rerollCount,
+		coverLetter: coverLetter,
 		loadingMsg:  "Loading submission...",
 	}.setState(state)
 }
@@ -133,6 +147,22 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch m.state {
 			case submitStateTo:
 				m = m.setState(submitStateConfirm)
+			case submitStateCoverLetter:
+				if m.headBranch == "" {
+					break
+				}
+				cmd := exec.Command("git", "branch", "--edit-description", m.headBranch)
+				return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+					if err != nil {
+						return err
+					}
+					coverLetter, err := loadGitBranchDescription(m.headBranch)
+					if err != nil {
+						return err
+					} else {
+						return coverLetterUpdated{coverLetter}
+					}
+				})
 			case submitStateConfirm:
 				if !m.canSubmit() {
 					break
@@ -144,7 +174,7 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						baseBranch:  m.baseBranch,
 						rerollCount: m.rerollCount,
 					}
-					return submitPatches(m.ctx, m.headBranch, &cfg, m.smtpConfig)
+					return submitPatches(m.ctx, m.headBranch, &cfg, m.smtpConfig, m.coverLetter != "")
 				}
 			}
 		case tea.KeyUp:
@@ -164,6 +194,8 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case submissionLog:
 		m.loadingMsg = ""
 		m.commits = msg.commits
+	case coverLetterUpdated:
+		m.coverLetter = msg.coverLetter
 	case submissionComplete:
 		m.loadingMsg = ""
 		m.done = true
@@ -196,6 +228,16 @@ func (m submitModel) View() string {
 	sb.WriteString(field.View() + "\n")
 
 	sb.WriteString(m.to.View() + "\n")
+
+	var coverLetter string
+	if m.coverLetter != "" {
+		coverLetter, _, _ = strings.Cut(m.coverLetter, "\n")
+		coverLetter = truncate.StringWithTail(coverLetter, 72, "...")
+	} else {
+		coverLetter = "none"
+	}
+	field = formField{Label: "Cover letter", Text: coverLetter, Active: m.state == submitStateCoverLetter}
+	sb.WriteString(field.View() + "\n")
 
 	sb.WriteString("\n")
 
@@ -262,7 +304,7 @@ func loadSubmissionLog(ctx context.Context, baseBranch string) tea.Msg {
 	return submissionLog{commits: commits}
 }
 
-func submitPatches(ctx context.Context, headBranch string, submission *submissionConfig, smtp *smtpConfig) tea.Msg {
+func submitPatches(ctx context.Context, headBranch string, submission *submissionConfig, smtp *smtpConfig, coverLetter bool) tea.Msg {
 	if err := saveSubmissionConfig(headBranch, submission); err != nil {
 		return err
 	}
@@ -273,7 +315,10 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 	}
 	_, fromHostname, _ := strings.Cut(from, "@")
 
-	patches, err := formatGitPatches(ctx, submission.baseBranch, submission.rerollCount)
+	patches, err := formatGitPatches(ctx, submission.baseBranch, &gitFormatPatchOptions{
+		RerollCount: submission.rerollCount,
+		CoverLetter: coverLetter,
+	})
 	if err != nil {
 		return err
 	}
@@ -349,6 +394,13 @@ func saveSubmissionConfig(branch string, cfg *submissionConfig) error {
 	}
 
 	return nil
+}
+
+func loadGitBranchDescription(branch string) (string, error) {
+	if branch == "" {
+		return "", nil
+	}
+	return getGitConfig("branch." + branch + ".description")
 }
 
 func getLastSentHash(branch string) string {

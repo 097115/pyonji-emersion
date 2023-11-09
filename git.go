@@ -158,15 +158,23 @@ func (p *patch) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func formatGitPatches(ctx context.Context, baseBranch, rerollCount string) ([]patch, error) {
+type gitFormatPatchOptions struct {
+	RerollCount string
+	CoverLetter bool
+}
+
+func formatGitPatches(ctx context.Context, baseBranch string, options *gitFormatPatchOptions) ([]patch, error) {
 	baseCommit, err := getGitMergeBase(baseBranch, "HEAD")
 	if err != nil {
 		return nil, err
 	}
 
 	args := []string{"format-patch", "--stdout", "--encode-email-headers"}
-	if rerollCount != "" {
-		args = append(args, "--reroll-count="+rerollCount)
+	if options.RerollCount != "" {
+		args = append(args, "--reroll-count="+options.RerollCount)
+	}
+	if options.CoverLetter {
+		args = append(args, "--cover-letter", "--cover-from-description=subject")
 	}
 	args = append(args, "--base="+baseCommit, baseBranch+"..")
 
