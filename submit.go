@@ -20,7 +20,8 @@ import (
 var hashStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 
 type submissionLog struct {
-	commits []logCommit
+	commits              []logCommit
+	sameAsPrevSubmission bool
 }
 
 type submissionConfig struct {
@@ -63,15 +64,16 @@ type submitModel struct {
 	spinner spinner.Model
 	to      textinput.Model
 
-	state       submitState
-	headBranch  string
-	baseBranch  string
-	rerollCount string
-	coverLetter string
-	commits     []logCommit
-	loadingMsg  string
-	errMsg      string
-	done        bool
+	state                submitState
+	headBranch           string
+	baseBranch           string
+	rerollCount          string
+	coverLetter          string
+	commits              []logCommit
+	sameAsPrevSubmission bool
+	loadingMsg           string
+	errMsg               string
+	done                 bool
 }
 
 func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel {
@@ -142,7 +144,7 @@ func (m submitModel) Init() tea.Cmd {
 	return tea.Batch(m.spinner.Tick, textinput.Blink, func() tea.Msg {
 		return <-m.progress
 	}, func() tea.Msg {
-		return loadSubmissionLog(m.ctx, m.baseBranch)
+		return loadSubmissionLog(m.ctx, m.baseBranch, m.headBranch)
 	})
 }
 
@@ -205,6 +207,7 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case submissionLog:
 		m.loadingMsg = ""
 		m.commits = msg.commits
+		m.sameAsPrevSubmission = msg.sameAsPrevSubmission
 	case coverLetterUpdated:
 		m.coverLetter = msg.coverLetter
 	case submissionProgress:
@@ -263,6 +266,10 @@ func (m submitModel) View() string {
 
 	sb.WriteString("\n")
 
+	if m.sameAsPrevSubmission {
+		sb.WriteString(warningStyle.Render("⚠ This version has already been submitted") + "\n\n")
+	}
+
 	if m.loadingMsg != "" {
 		sb.WriteString(m.spinner.View() + m.loadingMsg + "\n")
 	} else if m.done {
@@ -319,13 +326,19 @@ func (m submitModel) canSubmit() bool {
 	return len(m.commits) > 0 && checkAddress(m.to.Value())
 }
 
-func loadSubmissionLog(ctx context.Context, baseBranch string) tea.Msg {
-	commits, err := loadGitLog(ctx, baseBranch+"..")
+func loadSubmissionLog(ctx context.Context, baseBranch, headBranch string) tea.Msg {
+	commits, err := loadGitLog(ctx, baseBranch+".."+headBranch)
 	if err != nil {
 		return err
 	}
 
-	return submissionLog{commits: commits}
+	sameAsPrevSubmission := false
+	if len(commits) > 0 {
+		last := getLastSentHash(headBranch)
+		sameAsPrevSubmission = last != "" && last == commits[0].Hash
+	}
+
+	return submissionLog{commits: commits, sameAsPrevSubmission: sameAsPrevSubmission}
 }
 
 func submitPatches(ctx context.Context, headBranch string, submission *submissionConfig, smtp *smtpConfig, coverLetter bool, ch chan<- submissionProgress) tea.Msg {
