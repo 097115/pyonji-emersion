@@ -17,7 +17,7 @@ import (
 
 var hashStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 
-type submission struct {
+type submissionLog struct {
 	commits []logCommit
 }
 
@@ -123,7 +123,7 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 
 func (m submitModel) Init() tea.Cmd {
 	return tea.Batch(m.spinner.Tick, textinput.Blink, func() tea.Msg {
-		return loadSubmission(m.ctx, m.baseBranch)
+		return loadSubmissionLog(m.ctx, m.baseBranch)
 	})
 }
 
@@ -164,7 +164,7 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
-	case submission:
+	case submissionLog:
 		m.loadingMsg = ""
 		m.commits = msg.commits
 	case submissionComplete:
@@ -253,13 +253,13 @@ func (m submitModel) canSubmit() bool {
 	return len(m.commits) > 0 && checkAddress(m.to.Value())
 }
 
-func loadSubmission(ctx context.Context, baseBranch string) tea.Msg {
+func loadSubmissionLog(ctx context.Context, baseBranch string) tea.Msg {
 	commits, err := loadGitLog(ctx, baseBranch+"..")
 	if err != nil {
 		return err
 	}
 
-	return submission{commits: commits}
+	return submissionLog{commits: commits}
 }
 
 func submitPatches(ctx context.Context, headBranch string, submission *submissionConfig, smtp *smtpConfig) tea.Msg {
