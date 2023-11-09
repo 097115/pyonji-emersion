@@ -129,7 +129,7 @@ type logCommit struct {
 }
 
 func loadGitLog(ctx context.Context, revRange string) ([]logCommit, error) {
-	cmd := exec.CommandContext(ctx, "git", "log", "--pretty=format:%h %s", revRange)
+	cmd := exec.CommandContext(ctx, "git", "log", "--pretty=format:%H %s", revRange)
 	b, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load git log: %v", err)

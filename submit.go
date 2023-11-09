@@ -286,7 +286,8 @@ func (m submitModel) View() string {
 			n = 10
 		}
 		for _, commit := range m.commits[:n] {
-			sb.WriteString(hashStyle.Render(commit.Hash) + " " + commit.Subject + "\n")
+			hash := commit.Hash[:12]
+			sb.WriteString(hashStyle.Render(hash) + " " + commit.Subject + "\n")
 		}
 	} else if m.errMsg == "" {
 		sb.WriteString(warningStyle.Render("⚠ There are no changes\n"))
