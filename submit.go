@@ -33,7 +33,11 @@ type coverLetterUpdated struct {
 	coverLetter string
 }
 
-type submissionComplete struct{}
+type submissionProgress struct {
+	mailsSent  int
+	mailsTotal int
+	done       bool
+}
 
 type submitState int
 
@@ -54,6 +58,7 @@ var (
 type submitModel struct {
 	ctx        context.Context
 	smtpConfig *smtpConfig
+	progress   chan submissionProgress
 
 	spinner spinner.Model
 	to      textinput.Model
@@ -122,6 +127,7 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 	return submitModel{
 		ctx:         ctx,
 		smtpConfig:  smtpConfig,
+		progress:    make(chan submissionProgress, 1),
 		spinner:     s,
 		to:          to,
 		headBranch:  headBranch,
@@ -134,6 +140,8 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 
 func (m submitModel) Init() tea.Cmd {
 	return tea.Batch(m.spinner.Tick, textinput.Blink, func() tea.Msg {
+		return <-m.progress
+	}, func() tea.Msg {
 		return loadSubmissionLog(m.ctx, m.baseBranch)
 	})
 }
@@ -177,7 +185,7 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						baseBranch:  m.baseBranch,
 						rerollCount: m.rerollCount,
 					}
-					return submitPatches(m.ctx, m.headBranch, &cfg, m.smtpConfig, m.coverLetter != "")
+					return submitPatches(m.ctx, m.headBranch, &cfg, m.smtpConfig, m.coverLetter != "", m.progress)
 				}
 			}
 		case tea.KeyUp:
@@ -199,10 +207,21 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.commits = msg.commits
 	case coverLetterUpdated:
 		m.coverLetter = msg.coverLetter
-	case submissionComplete:
-		m.loadingMsg = ""
-		m.done = true
-		return m, tea.Quit
+	case submissionProgress:
+		if msg.done {
+			m.loadingMsg = ""
+			m.done = true
+			return m, tea.Quit
+		} else {
+			if msg.mailsSent < msg.mailsTotal {
+				m.loadingMsg = fmt.Sprintf("Sending mail %v/%v...", msg.mailsSent+1, msg.mailsTotal)
+			} else {
+				m.loadingMsg = "Finishing up submission..."
+			}
+			return m, func() tea.Msg {
+				return <-m.progress
+			}
+		}
 	case error:
 		m.loadingMsg = ""
 		m.errMsg = msg.Error()
@@ -308,7 +327,7 @@ func loadSubmissionLog(ctx context.Context, baseBranch string) tea.Msg {
 	return submissionLog{commits: commits}
 }
 
-func submitPatches(ctx context.Context, headBranch string, submission *submissionConfig, smtp *smtpConfig, coverLetter bool) tea.Msg {
+func submitPatches(ctx context.Context, headBranch string, submission *submissionConfig, smtp *smtpConfig, coverLetter bool, ch chan<- submissionProgress) tea.Msg {
 	if err := saveSubmissionConfig(headBranch, submission); err != nil {
 		return err
 	}
@@ -333,6 +352,9 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 	}
 	defer c.Close()
 
+	progress := submissionProgress{mailsTotal: len(patches)}
+	ch <- progress
+
 	var firstMsgID string
 	for _, patch := range patches {
 		patch.header.SetAddressList("To", []*mail.Address{{Address: submission.to}})
@@ -350,13 +372,17 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 		if err != nil {
 			return err
 		}
+
+		progress.mailsSent++
+		ch <- progress
 	}
 
 	if err := saveLastSentHash(headBranch); err != nil {
 		return err
 	}
 
-	return submissionComplete{}
+	progress.done = true
+	return progress
 }
 
 func loadSubmissionConfig(branch string) (*submissionConfig, error) {
