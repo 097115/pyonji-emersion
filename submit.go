@@ -241,15 +241,12 @@ func (m submitModel) View() string {
 
 	sb.WriteString("\n")
 
-	style := buttonStyle
-	if m.state == submitStateConfirm {
-		if m.canSubmit() {
-			style = buttonActiveStyle
-		} else {
-			style = buttonInactiveStyle
-		}
+	btn := button{
+		Label:    "Submit",
+		Active:   m.state == submitStateConfirm,
+		Disabled: !m.canSubmit(),
 	}
-	sb.WriteString(style.Render("Submit") + "\n")
+	sb.WriteString(btn.View() + "\n")
 	sb.WriteString("\n")
 
 	if len(m.commits) > 0 {
@@ -341,7 +338,8 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 			patch.header.SetMsgIDList("In-Reply-To", []string{firstMsgID})
 		}
 
-		err := c.SendMail(from, []string{submission.to}, bytes.NewReader(patch.Bytes()))
+		r := bytes.NewReader(patch.Bytes())
+		err := c.SendMail(from, []string{submission.to}, r)
 		if err != nil {
 			return err
 		}
@@ -472,4 +470,21 @@ func (f *formField) View() string {
 		labelStyle, textStyle = activeLabelStyle, activeTextStyle
 	}
 	return fmt.Sprintf("%v %v", labelStyle.Render(f.Label), textStyle.Render(f.Text))
+}
+
+type button struct {
+	Label            string
+	Active, Disabled bool
+}
+
+func (btn *button) View() string {
+	style := buttonStyle
+	if btn.Active {
+		if btn.Disabled {
+			style = buttonInactiveStyle
+		} else {
+			style = buttonActiveStyle
+		}
+	}
+	return style.Render(btn.Label)
 }
