@@ -357,6 +357,13 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 	}
 	_, fromHostname, _ := strings.Cut(from.Address, "@")
 
+	envelopeSender, err := getGitConfig("sendemail.envelopeSender")
+	if err != nil {
+		return err
+	} else if envelopeSender == "" {
+		envelopeSender = from.Address
+	}
+
 	patches, err := formatGitPatches(ctx, submission.baseBranch, &gitFormatPatchOptions{
 		RerollCount: submission.rerollCount,
 		CoverLetter: coverLetter,
@@ -388,7 +395,7 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 		}
 
 		r := bytes.NewReader(patch.Bytes())
-		err := c.SendMail(from.Address, []string{submission.to}, r)
+		err := c.SendMail(envelopeSender, []string{submission.to}, r)
 		if err != nil {
 			return err
 		}
