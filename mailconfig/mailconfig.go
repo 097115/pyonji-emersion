@@ -29,6 +29,10 @@ func DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
 		dnsSRVProvider{},
 		mozillaISPDBProvider{},
 		mozillaSubdomainProvider{},
+		subdomainGuessProvider{"mail", false},
+		subdomainGuessProvider{"smtp", false},
+		subdomainGuessProvider{"mail", true},
+		subdomainGuessProvider{"smtp", true},
 	}
 	results := make([]*providerResult, len(providers))
 	for i := range providers {
