@@ -226,7 +226,9 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.done = true
 			return m, tea.Quit
 		} else {
-			if msg.mailsSent < msg.mailsTotal {
+			if msg.mailsSent == 0 && msg.mailsTotal == 1 {
+				m.loadingMsg = fmt.Sprintf("Sending mail...")
+			} else if msg.mailsSent < msg.mailsTotal {
 				m.loadingMsg = fmt.Sprintf("Sending mail %v/%v...", msg.mailsSent+1, msg.mailsTotal)
 			} else {
 				m.loadingMsg = "Finishing up submission..."
