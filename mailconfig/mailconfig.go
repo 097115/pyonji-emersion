@@ -44,7 +44,12 @@ func DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
 
 	var err error
 	for _, res := range results {
-		<-res.done
+		select {
+		case <-res.done:
+			// ok
+		case <-ctx.Done():
+			return nil, ErrNotFound
+		}
 		if res.cfg != nil {
 			return res.cfg, nil
 		}
