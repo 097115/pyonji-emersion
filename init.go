@@ -20,7 +20,8 @@ type passwordCheckResult struct {
 }
 
 type initModel struct {
-	ctx context.Context
+	ctx       context.Context
+	userEmail string
 
 	emailInput    textinput.Model
 	passwordInput textinput.Model
@@ -40,11 +41,11 @@ func initialInitModel(ctx context.Context) initModel {
 	emailInput.Placeholder = "me@example.org"
 	emailInput.Focus()
 
-	defaultEmail, err := getGitConfig("user.email")
+	userEmail, err := getGitConfig("user.email")
 	if err != nil {
 		log.Fatal(err)
 	}
-	emailInput.SetValue(defaultEmail)
+	emailInput.SetValue(userEmail)
 
 	passwordInput := textinput.New()
 	passwordInput.Prompt = "Password: "
@@ -56,7 +57,8 @@ func initialInitModel(ctx context.Context) initModel {
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	return initModel{
-		ctx: ctx,
+		ctx:       ctx,
+		userEmail: userEmail,
 
 		emailInput:    emailInput,
 		passwordInput: passwordInput,
@@ -99,6 +101,11 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			if err := saveGitSendEmailConfig(&m.smtpConfig); err != nil {
 				log.Fatal(err)
+			}
+			if m.emailInput.Value() != m.userEmail {
+				if err := setGitGlobalConfig("sendemail.from", m.emailInput.Value()); err != nil {
+					log.Fatal(err)
+				}
 			}
 			m.done = true
 			return m.quit()
