@@ -46,6 +46,7 @@ type submitState int
 
 const (
 	submitStateTo submitState = iota
+	submitStateVersion
 	submitStateCoverLetter
 	submitStateConfirm
 )
@@ -65,11 +66,11 @@ type submitModel struct {
 
 	spinner spinner.Model
 	to      textinput.Model
+	version textinput.Model
 
 	state                submitState
 	headBranch           string
 	baseBranch           string
-	rerollCount          string
 	coverLetter          string
 	commits              []logCommit
 	sameAsPrevSubmission bool
@@ -122,21 +123,28 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
-	to := textinput.New()
-	to.Prompt = "To "
-	to.PromptStyle = labelStyle.Copy()
-	to.TextStyle = textStyle.Copy()
-	to.SetValue(cfg.to)
+	toInput := textinput.New()
+	toInput.Prompt = "To "
+	toInput.PromptStyle = labelStyle.Copy()
+	toInput.TextStyle = textStyle.Copy()
+	toInput.SetValue(cfg.to)
+
+	versionInput := textinput.New()
+	versionInput.Prompt = "Version "
+	versionInput.Placeholder = "1"
+	versionInput.PromptStyle = labelStyle.Copy()
+	versionInput.TextStyle = textStyle.Copy()
+	versionInput.SetValue(rerollCount)
 
 	return submitModel{
 		ctx:         ctx,
 		smtpConfig:  smtpConfig,
 		progress:    make(chan submissionProgress, 1),
 		spinner:     s,
-		to:          to,
+		to:          toInput,
+		version:     versionInput,
 		headBranch:  headBranch,
 		baseBranch:  cfg.baseBranch,
-		rerollCount: rerollCount,
 		coverLetter: coverLetter,
 		loadingMsg:  "Loading submission...",
 	}.setState(state)
@@ -160,7 +168,7 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEnter:
 			switch m.state {
-			case submitStateTo:
+			case submitStateTo, submitStateVersion:
 				m = m.setState(submitStateConfirm)
 			case submitStateCoverLetter:
 				if m.headBranch == "" {
@@ -187,7 +195,7 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cfg := submissionConfig{
 						to:          m.to.Value(),
 						baseBranch:  m.baseBranch,
-						rerollCount: m.rerollCount,
+						rerollCount: m.version.Value(),
 					}
 					return submitPatches(m.ctx, m.headBranch, &cfg, m.smtpConfig, m.coverLetter != "", m.progress)
 				}
@@ -233,8 +241,10 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	m.to, cmd = m.to.Update(msg)
-	return m, cmd
+	var toCmd, versionCmd tea.Cmd
+	m.to, toCmd = m.to.Update(msg)
+	m.version, versionCmd = m.version.Update(msg)
+	return m, tea.Batch(toCmd, versionCmd)
 }
 
 func (m submitModel) View() string {
@@ -247,14 +257,8 @@ func (m submitModel) View() string {
 	field := formField{Label: "Base", Text: m.baseBranch}
 	sb.WriteString(field.View() + "\n")
 
-	version := m.rerollCount
-	if version == "" {
-		version = "1"
-	}
-	field = formField{Label: "Version", Text: version}
-	sb.WriteString(field.View() + "\n")
-
 	sb.WriteString(m.to.View() + "\n")
+	sb.WriteString(m.version.View() + "\n")
 
 	var coverLetter string
 	if m.coverLetter != "" {
@@ -314,18 +318,26 @@ func (m submitModel) setState(state submitState) submitModel {
 	m.to.PromptStyle = labelStyle
 	m.to.TextStyle = textStyle
 
+	m.version.Blur()
+	m.version.PromptStyle = labelStyle
+	m.version.TextStyle = textStyle
+
 	m.state = state
 	switch state {
 	case submitStateTo:
 		m.to.Focus()
 		m.to.PromptStyle = activeLabelStyle
 		m.to.TextStyle = activeTextStyle
+	case submitStateVersion:
+		m.version.Focus()
+		m.version.PromptStyle = activeLabelStyle
+		m.version.TextStyle = activeTextStyle
 	}
 	return m
 }
 
 func (m submitModel) canSubmit() bool {
-	return len(m.commits) > 0 && checkAddress(m.to.Value())
+	return len(m.commits) > 0 && checkAddress(m.to.Value()) && checkVersion(m.version.Value())
 }
 
 func loadSubmissionLog(ctx context.Context, baseBranch, headBranch string) tea.Msg {
@@ -564,6 +576,15 @@ func pluralize(name string, n int) string {
 func checkAddress(addr string) bool {
 	_, err := mail.ParseAddress("<" + addr + ">")
 	return err == nil
+}
+
+func checkVersion(ver string) bool {
+	for _, ch := range ver {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 type formField struct {
