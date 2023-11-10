@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func discoverTCP(ctx context.Context, service, name string) (string, string, error) {
+func discoverSRVTCP(ctx context.Context, service, name string) (string, string, error) {
 	var resolver net.Resolver
 	_, addrs, err := resolver.LookupSRV(ctx, service, "tcp", name)
 	if dnsErr, ok := err.(*net.DNSError); ok {
@@ -31,24 +31,24 @@ func discoverTCP(ctx context.Context, service, name string) (string, string, err
 	return target, fmt.Sprintf("%v", addr.Port), nil
 }
 
-type dnsProvider struct{}
+type dnsSRVProvider struct{}
 
-var _ provider = dnsProvider{}
+var _ provider = dnsSRVProvider{}
 
 // DiscoverSMTP performs a DNS-based SMTP submission service discovery, as
 // defined in RFC 6186 section 3.1. RFC 8314 section 5.1 adds a new service for
 // SMTP submission with implicit TLS.
-func (dnsProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
+func (dnsSRVProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
 	_, domain, _ := strings.Cut(address, "@")
 
-	hostname, port, err := discoverTCP(ctx, "submissions", domain)
+	hostname, port, err := discoverSRVTCP(ctx, "submissions", domain)
 	if err != nil {
 		return nil, err
 	} else if hostname != "" {
 		return &SMTP{Hostname: hostname, Port: port}, nil
 	}
 
-	hostname, port, err = discoverTCP(ctx, "submission", domain)
+	hostname, port, err = discoverSRVTCP(ctx, "submission", domain)
 	if err != nil {
 		return nil, err
 	} else if hostname != "" {

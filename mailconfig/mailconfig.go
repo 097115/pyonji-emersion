@@ -26,12 +26,12 @@ func DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
 	defer cancel()
 
 	var (
-		dns              dnsProvider
+		dnsSRV           dnsSRVProvider
 		mozillaISPDB     mozillaISPDBProvider
 		mozillaSubdomain mozillaSubdomainProvider
 	)
 
-	providers := []provider{&dns, &mozillaSubdomain, &mozillaISPDB}
+	providers := []provider{&dnsSRV, &mozillaSubdomain, &mozillaISPDB}
 	results := make([]*providerResult, len(providers))
 	for i := range providers {
 		p := providers[i]
