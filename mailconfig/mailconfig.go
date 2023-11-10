@@ -50,7 +50,7 @@ func DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
 		if res.cfg != nil {
 			return res.cfg, nil
 		}
-		if res.err != nil && res.err != ErrNotFound && err == nil {
+		if res.err != nil && res.err != ErrNotFound && !errors.Is(res.err, context.DeadlineExceeded) && err == nil {
 			err = res.err
 		}
 	}
