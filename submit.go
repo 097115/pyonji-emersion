@@ -351,11 +351,11 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 		return err
 	}
 
-	from, err := getGitConfig("user.email")
+	from, err := loadGitSendEmailFrom()
 	if err != nil {
 		return err
 	}
-	_, fromHostname, _ := strings.Cut(from, "@")
+	_, fromHostname, _ := strings.Cut(from.Address, "@")
 
 	patches, err := formatGitPatches(ctx, submission.baseBranch, &gitFormatPatchOptions{
 		RerollCount: submission.rerollCount,
@@ -376,6 +376,7 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 
 	var firstMsgID string
 	for _, patch := range patches {
+		patch.header.SetAddressList("From", []*mail.Address{from})
 		patch.header.SetAddressList("To", []*mail.Address{{Address: submission.to}})
 		if err := patch.header.GenerateMessageIDWithHostname(fromHostname); err != nil {
 			return err
@@ -387,7 +388,7 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 		}
 
 		r := bytes.NewReader(patch.Bytes())
-		err := c.SendMail(from, []string{submission.to}, r)
+		err := c.SendMail(from.Address, []string{submission.to}, r)
 		if err != nil {
 			return err
 		}
@@ -402,6 +403,32 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 
 	progress.done = true
 	return progress
+}
+
+func loadGitSendEmailFrom() (*mail.Address, error) {
+	raw, err := getGitConfig("sendemail.from")
+	if err != nil {
+		return nil, err
+	} else if raw != "" {
+		addr, err := mail.ParseAddress(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid sendemail.from: %v", err)
+		}
+		return addr, nil
+	}
+
+	email, err := getGitConfig("user.email")
+	if err != nil {
+		return nil, err
+	}
+	name, err := getGitConfig("user.name")
+	if err != nil {
+		return nil, err
+	}
+	if email == "" {
+		return nil, fmt.Errorf("user.email not set")
+	}
+	return &mail.Address{Name: name, Address: email}, nil
 }
 
 func loadSubmissionConfig(branch string) (*submissionConfig, error) {
