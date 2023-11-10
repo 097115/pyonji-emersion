@@ -264,3 +264,12 @@ func checkGitBranch(name string) bool {
 	cmd := exec.Command("git", "rev-parse", "--verify", name)
 	return cmd.Run() == nil
 }
+
+func getGitToplevelDir() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get Git toplevel directory: %v", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}

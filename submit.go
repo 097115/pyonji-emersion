@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -345,6 +347,9 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 	if err := saveSubmissionConfig(headBranch, submission); err != nil {
 		return err
 	}
+	if err := autosaveSendEmailTo(submission.to); err != nil {
+		return err
+	}
 
 	from, err := getGitConfig("user.email")
 	if err != nil {
@@ -439,6 +444,27 @@ func saveSubmissionConfig(branch string, cfg *submissionConfig) error {
 	}
 
 	return nil
+}
+
+func autosaveSendEmailTo(to string) error {
+	cur, err := loadGitSendEmailTo()
+	if err != nil {
+		return err
+	} else if cur != nil {
+		return nil // Don't overwrite any previous setting
+	}
+
+	toplevelDir, err := getGitToplevelDir()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(toplevelDir, "MAINTAINERS")); err == nil {
+		return nil // Probably multiple mailing lists involved
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check for MAINTAINERS: %v", err)
+	}
+
+	return setGitConfig("sendemail.to", to)
 }
 
 func loadGitBranchDescription(branch string) (string, error) {
