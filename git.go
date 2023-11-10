@@ -46,7 +46,7 @@ func saveGitSendEmailConfig(cfg *smtpConfig) error {
 		enc = "tls"
 	}
 
-	kvs := [][2]string{
+	kvs := []struct{ k, v string }{
 		{"smtpServer", cfg.Hostname},
 		{"smtpServerPort", cfg.Port},
 		{"smtpEncryption", enc},
@@ -54,7 +54,7 @@ func saveGitSendEmailConfig(cfg *smtpConfig) error {
 		{"smtpPass", cfg.Password}, // TODO: do not store as plaintext
 	}
 	for _, kv := range kvs {
-		if err := setGitGlobalConfig("sendemail."+kv[0], kv[1]); err != nil {
+		if err := setGitGlobalConfig("sendemail."+kv.k, kv.v); err != nil {
 			return err
 		}
 	}
