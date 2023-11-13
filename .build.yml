@@ -1,0 +1,12 @@
+image: alpine/latest
+packages:
+  - go
+sources:
+  - https://git.sr.ht/~emersion/pyonji
+tasks:
+  - build: |
+      cd pyonji
+      go build -race -v ./...
+  - test: |
+      cd pyonji
+      go test -race ./...
