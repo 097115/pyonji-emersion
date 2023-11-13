@@ -12,12 +12,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	smtpConfig, err := loadGitSendEmailConfig()
+	gitConfig, err := loadGitSendEmailConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if smtpConfig == nil {
+	if gitConfig == nil {
 		p := tea.NewProgram(initialInitModel(ctx))
 		if m, err := p.Run(); err != nil {
 			log.Fatal(err)
@@ -26,11 +26,11 @@ func main() {
 			if !m.done {
 				return
 			}
-			smtpConfig = &m.smtpConfig
+			gitConfig = &gitSendEmailConfig{SMTP: &m.smtpConfig}
 		}
 	}
 
-	p := tea.NewProgram(initialSubmitModel(ctx, smtpConfig))
+	p := tea.NewProgram(initialSubmitModel(ctx, gitConfig))
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}

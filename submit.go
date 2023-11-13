@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -60,9 +61,9 @@ var (
 )
 
 type submitModel struct {
-	ctx        context.Context
-	smtpConfig *smtpConfig
-	progress   chan submissionProgress
+	ctx       context.Context
+	gitConfig *gitSendEmailConfig
+	progress  chan submissionProgress
 
 	spinner spinner.Model
 	to      textinput.Model
@@ -79,7 +80,7 @@ type submitModel struct {
 	done                 bool
 }
 
-func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel {
+func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) submitModel {
 	headBranch := findGitCurrentBranch()
 
 	cfg, err := loadSubmissionConfig(headBranch)
@@ -138,7 +139,7 @@ func initialSubmitModel(ctx context.Context, smtpConfig *smtpConfig) submitModel
 
 	return submitModel{
 		ctx:         ctx,
-		smtpConfig:  smtpConfig,
+		gitConfig:   gitConfig,
 		progress:    make(chan submissionProgress, 1),
 		spinner:     s,
 		to:          toInput,
@@ -197,7 +198,7 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						baseBranch:  m.baseBranch,
 						rerollCount: m.version.Value(),
 					}
-					return submitPatches(m.ctx, m.headBranch, &cfg, m.smtpConfig, m.coverLetter != "", m.progress)
+					return submitPatches(m.ctx, m.headBranch, &cfg, m.gitConfig, m.coverLetter != "", m.progress)
 				}
 			}
 		case tea.KeyUp:
@@ -357,7 +358,12 @@ func loadSubmissionLog(ctx context.Context, baseBranch, headBranch string) tea.M
 	return submissionLog{commits: commits, sameAsPrevSubmission: sameAsPrevSubmission}
 }
 
-func submitPatches(ctx context.Context, headBranch string, submission *submissionConfig, smtp *smtpConfig, coverLetter bool, ch chan<- submissionProgress) tea.Msg {
+type mailSender interface {
+	Close() error
+	SendMail(ctx context.Context, from string, to []string, data io.Reader) error
+}
+
+func submitPatches(ctx context.Context, headBranch string, submission *submissionConfig, git *gitSendEmailConfig, coverLetter bool, ch chan<- submissionProgress) tea.Msg {
 	if err := saveSubmissionConfig(headBranch, submission); err != nil {
 		return err
 	}
@@ -386,17 +392,9 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 		return err
 	}
 
-	c, err := smtp.dialAndAuth(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Close()
-
-	progress := submissionProgress{mailsTotal: len(patches)}
-	ch <- progress
-
 	var firstMsgID string
-	for _, patch := range patches {
+	for i := range patches {
+		patch := &patches[i]
 		patch.header.SetAddressList("From", []*mail.Address{from})
 		patch.header.SetAddressList("To", []*mail.Address{{Address: submission.to}})
 		if err := patch.header.GenerateMessageIDWithHostname(fromHostname); err != nil {
@@ -407,9 +405,25 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 		} else {
 			patch.header.SetMsgIDList("In-Reply-To", []string{firstMsgID})
 		}
+	}
 
+	var sender mailSender
+	if git.SMTP != nil {
+		sender, err = git.SMTP.dialAndAuth(ctx)
+	} else {
+		sender = &sendmailCmd{git.SendmailCmd}
+	}
+	if err != nil {
+		return err
+	}
+	defer sender.Close()
+
+	progress := submissionProgress{mailsTotal: len(patches)}
+	ch <- progress
+
+	for _, patch := range patches {
 		r := bytes.NewReader(patch.Bytes())
-		err := c.SendMail(envelopeSender, []string{submission.to}, r)
+		err := sender.SendMail(ctx, envelopeSender, []string{submission.to}, r)
 		if err != nil {
 			return err
 		}

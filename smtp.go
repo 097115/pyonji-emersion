@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"net"
 
 	"github.com/emersion/go-sasl"
@@ -25,7 +26,7 @@ func (cfg *smtpConfig) check(ctx context.Context) error {
 	return err
 }
 
-func (cfg *smtpConfig) dialAndAuth(ctx context.Context) (*smtp.Client, error) {
+func (cfg *smtpConfig) dialAndAuth(ctx context.Context) (*smtpClient, error) {
 	addr := net.JoinHostPort(cfg.Hostname, cfg.Port)
 
 	var (
@@ -49,5 +50,16 @@ func (cfg *smtpConfig) dialAndAuth(ctx context.Context) (*smtp.Client, error) {
 		return nil, err
 	}
 
-	return c, err
+	return &smtpClient{c}, err
+}
+
+type smtpClient struct {
+	*smtp.Client
+}
+
+var _ mailSender = smtpClient{}
+
+func (c smtpClient) SendMail(ctx context.Context, from string, to []string, data io.Reader) error {
+	// TODO: pass the context somehow
+	return c.Client.SendMail(from, to, data)
 }

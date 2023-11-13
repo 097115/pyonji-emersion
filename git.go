@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/emersion/go-mbox"
@@ -61,14 +62,20 @@ func saveGitSendEmailConfig(cfg *smtpConfig) error {
 	return nil
 }
 
-func loadGitSendEmailConfig() (*smtpConfig, error) {
-	var server, port, enc, user, pass string
+type gitSendEmailConfig struct {
+	SMTP        *smtpConfig
+	SendmailCmd string
+}
+
+func loadGitSendEmailConfig() (*gitSendEmailConfig, error) {
+	var server, port, enc, user, pass, sendmailCmd string
 	entries := map[string]*string{
 		"smtpServer":     &server,
 		"smtpServerPort": &port,
 		"smtpEncryption": &enc,
 		"smtpUser":       &user,
 		"smtpPass":       &pass,
+		"sendmailCmd":    &sendmailCmd,
 	}
 	for k, ptr := range entries {
 		v, err := getGitConfig("sendemail." + k)
@@ -78,34 +85,44 @@ func loadGitSendEmailConfig() (*smtpConfig, error) {
 		*ptr = v
 	}
 
-	if server == "" {
+	// git-send-email allows specifying a sendmail command in smtpServer
+	if filepath.IsAbs(server) {
+		server, sendmailCmd = "", server
+	}
+
+	if server == "" && sendmailCmd == "" {
 		return nil, nil
 	}
 
-	var cfg smtpConfig
-	cfg.Hostname = server
-	switch enc {
-	case "", "ssl":
-		// direct TLS
-	case "tls":
-		cfg.STARTTLS = true
-	case "none":
-		cfg.InsecureNoTLS = true
-	default:
-		return nil, fmt.Errorf("invalid sendemail.smtpEncryption %q", enc)
-	}
-	switch port {
-	case "":
-		if cfg.STARTTLS {
-			cfg.Port = "submission"
-		} else {
-			cfg.Port = "submissions"
+	var cfg gitSendEmailConfig
+	if server != "" {
+		cfg.SMTP = new(smtpConfig)
+		cfg.SMTP.Hostname = server
+		switch enc {
+		case "", "ssl":
+			// direct TLS
+		case "tls":
+			cfg.SMTP.STARTTLS = true
+		case "none":
+			cfg.SMTP.InsecureNoTLS = true
+		default:
+			return nil, fmt.Errorf("invalid sendemail.smtpEncryption %q", enc)
 		}
-	default:
-		cfg.Port = port
+		switch port {
+		case "":
+			if cfg.SMTP.STARTTLS {
+				cfg.SMTP.Port = "submission"
+			} else {
+				cfg.SMTP.Port = "submissions"
+			}
+		default:
+			cfg.SMTP.Port = port
+		}
+		cfg.SMTP.Username = user
+		cfg.SMTP.Password = pass
+	} else {
+		cfg.SendmailCmd = sendmailCmd
 	}
-	cfg.Username = user
-	cfg.Password = pass
 	return &cfg, nil
 }
 
