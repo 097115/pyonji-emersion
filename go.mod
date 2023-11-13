@@ -1,6 +1,6 @@
 module git.sr.ht/~emersion/pyonji
 
-go 1.21.3
+go 1.18
 
 require (
 	github.com/charmbracelet/bubbles v0.16.1
