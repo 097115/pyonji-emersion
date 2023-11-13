@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/emersion/go-message/mail"
 	"github.com/muesli/reflow/truncate"
+	"github.com/pborman/getopt/v2"
 )
 
 var hashStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
@@ -87,6 +88,11 @@ func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) subm
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	getopt.FlagLong(&cfg.baseBranch, "base", 0, "base branch")
+	getopt.FlagLong(&cfg.to, "to", 0, "recipient")
+	getopt.FlagLong(&cfg.rerollCount, "reroll-count", 'v', "iteration number")
+	getopt.Parse()
 
 	if cfg.baseBranch == "" {
 		cfg.baseBranch = findGitDefaultBranch()
