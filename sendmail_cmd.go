@@ -7,8 +7,13 @@ import (
 	"os/exec"
 )
 
+type sendmailConfig struct {
+	Cmd     string
+	Options []string
+}
+
 type sendmailCmd struct {
-	Cmd string
+	*sendmailConfig
 }
 
 var _ mailSender = (*sendmailCmd)(nil)
@@ -23,6 +28,7 @@ func (c *sendmailCmd) SendMail(ctx context.Context, from string, to []string, da
 		params = append(params, "-f", from)
 	}
 	params = append(params, to...)
+	params = append(params, c.Options...)
 
 	shParams := append([]string{"-c", c.Cmd + ` "$@"`, "-"}, params...)
 	cmd := exec.CommandContext(ctx, "sh", shParams...)

@@ -411,7 +411,7 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 	if git.SMTP != nil {
 		sender, err = git.SMTP.dialAndAuth(ctx)
 	} else {
-		sender = &sendmailCmd{git.SendmailCmd}
+		sender = &sendmailCmd{git.Sendmail}
 	}
 	if err != nil {
 		return err

@@ -25,6 +25,27 @@ func getGitConfig(key string) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
+func getAllGitConfig(key string) ([]string, error) {
+	// --get-all does not support --default
+	first, err := getGitConfig(key)
+	if err != nil {
+		return nil, err
+	} else if first == "" {
+		return nil, nil
+	}
+
+	cmd := exec.Command("git", "config", "--get-all", key)
+	b, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Git config %q: %v", key, err)
+	}
+	s := strings.TrimSpace(string(b))
+	if s == "" {
+		return nil, nil
+	}
+	return strings.Split(s, "\n"), nil
+}
+
 func setGitConfig(key, value string) error {
 	cmd := exec.Command("git", "config", key, value)
 	if err := cmd.Run(); err != nil {
@@ -63,8 +84,8 @@ func saveGitSendEmailConfig(cfg *smtpConfig) error {
 }
 
 type gitSendEmailConfig struct {
-	SMTP        *smtpConfig
-	SendmailCmd string
+	SMTP     *smtpConfig
+	Sendmail *sendmailConfig
 }
 
 func loadGitSendEmailConfig() (*gitSendEmailConfig, error) {
@@ -121,7 +142,14 @@ func loadGitSendEmailConfig() (*gitSendEmailConfig, error) {
 		cfg.SMTP.Username = user
 		cfg.SMTP.Password = pass
 	} else {
-		cfg.SendmailCmd = sendmailCmd
+		cfg.Sendmail = new(sendmailConfig)
+		cfg.Sendmail.Cmd = sendmailCmd
+
+		opts, err := getAllGitConfig("sendemail.smtpServerOption")
+		if err != nil {
+			return nil, err
+		}
+		cfg.Sendmail.Options = opts
 	}
 	return &cfg, nil
 }
