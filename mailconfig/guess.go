@@ -77,7 +77,12 @@ func (dnsMXGuessProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMT
 		return nil, ErrNotFound
 	}
 
-	mxDomain, ok := stripSubdomain(records[0].Host)
+	mxHost := strings.TrimSuffix(records[0].Host, ".")
+	if mxHost == "" {
+		return nil, ErrNotFound
+	}
+
+	mxDomain, ok := stripSubdomain(mxHost)
 	if !ok || mxDomain == domain {
 		return nil, ErrNotFound
 	}
