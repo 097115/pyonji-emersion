@@ -14,6 +14,7 @@ func GetVendorPasswordHint(addr, smtpHostname string) string {
 			"https://www.fastmail.help/hc/en-us/articles/360058752854"
 	}
 
+	// TODO: this doesn't work for custom domains
 	_, hostname, _ := strings.Cut(addr, "@")
 	switch hostname {
 	case "protonmail.com", "protonmail.ch", "proton.me", "pm.me":
