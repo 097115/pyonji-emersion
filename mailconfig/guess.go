@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/emersion/go-smtp"
@@ -61,4 +62,38 @@ func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, domain 
 	}
 
 	return &SMTP{Hostname: host, Port: port, STARTTLS: provider.startTLS}, nil
+}
+
+type dnsMXGuessProvider struct{}
+
+var _ provider = dnsMXGuessProvider{}
+
+func (dnsMXGuessProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
+	var resolver net.Resolver
+	records, err := resolver.LookupMX(ctx, domain)
+	if err != nil {
+		return nil, err
+	} else if len(records) == 0 {
+		return nil, ErrNotFound
+	}
+
+	mxDomain, ok := stripSubdomain(records[0].Host)
+	if !ok || mxDomain == domain {
+		return nil, ErrNotFound
+	}
+
+	return DiscoverSMTP(ctx, mxDomain)
+}
+
+func stripSubdomain(name string) (string, bool) {
+	// TODO: use something like publicsuffix.org
+	i := strings.LastIndexByte(name, '.')
+	if i < 0 {
+		return "", false
+	}
+	i = strings.LastIndexByte(name[:i], '.')
+	if i < 0 {
+		return "", false
+	}
+	return name[i+1:], true
 }
