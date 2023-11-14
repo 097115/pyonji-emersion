@@ -12,6 +12,8 @@ An easy-to-use tool to send e-mail patches.
   on-disk. No need to manually pass `-v2` when sending a new version. Your
   cover letter is not lost if the network is flaky.
 
+[![asciicast](https://asciinema.org/a/620880.svg)](https://asciinema.org/a/620880)
+
 # Usage
 
 Create a branch, commit changes, and then type `pyonji`. pyonji will ask for
