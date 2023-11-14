@@ -18,13 +18,7 @@ type provider interface {
 	DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error)
 }
 
-func DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	ctx, cancel = context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
+func discoverSMTP(ctx context.Context, domain string, withMXGuess bool) (*SMTP, error) {
 	providers := []provider{
 		dnsSRVProvider{},
 		mozillaISPDBProvider{},
@@ -33,8 +27,14 @@ func DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
 		subdomainGuessProvider{"smtp", false},
 		subdomainGuessProvider{"mail", true},
 		subdomainGuessProvider{"smtp", true},
-		dnsMXGuessProvider{},
 	}
+	if withMXGuess {
+		providers = append(providers, dnsMXGuessProvider{})
+	}
+
+	providerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	results := make([]*providerResult, len(providers))
 	for i := range providers {
 		p := providers[i]
@@ -43,7 +43,7 @@ func DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
 
 		go func() {
 			defer close(res.done)
-			res.cfg, res.err = p.DiscoverSMTP(ctx, domain)
+			res.cfg, res.err = p.DiscoverSMTP(providerCtx, domain)
 		}()
 	}
 
@@ -66,6 +66,13 @@ func DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
 		err = ErrNotFound
 	}
 	return nil, err
+}
+
+func DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	return discoverSMTP(ctx, domain, true)
 }
 
 type providerResult struct {
