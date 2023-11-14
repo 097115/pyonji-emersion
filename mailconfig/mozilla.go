@@ -19,7 +19,7 @@ type mozillaConfig struct {
 		OutgoingServer []struct {
 			Type       string            `xml:"type,attr"`
 			Hostname   string            `xml:"hostname"`
-			Port       string            `xml:"port"`
+			Port       uint16            `xml:"port"`
 			SocketType mozillaSocketType `xml:"socketType"`
 			Username   string            `xml:"username"`
 			Auth       []mozillaAuth     `xml:"authentication"`
@@ -84,7 +84,7 @@ func discoverMozilla(ctx context.Context, url string) (*SMTP, error) {
 
 		cfg := &SMTP{
 			Hostname: srv.Hostname,
-			Port:     srv.Port,
+			Port:     fmt.Sprintf("%v", srv.Port),
 		}
 		switch srv.SocketType {
 		case mozillaSocketSSL:
