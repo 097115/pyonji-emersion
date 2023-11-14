@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/emersion/go-smtp"
@@ -17,8 +16,7 @@ type subdomainGuessProvider struct {
 
 var _ provider = subdomainGuessProvider{}
 
-func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
-	_, domain, _ := strings.Cut(address, "@")
+func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
 	host := provider.subdomain + "." + domain
 
 	port := "465"

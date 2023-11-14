@@ -15,10 +15,10 @@ type SMTP struct {
 }
 
 type provider interface {
-	DiscoverSMTP(ctx context.Context, address string) (*SMTP, error)
+	DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error)
 }
 
-func DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
+func DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -42,7 +42,7 @@ func DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
 
 		go func() {
 			defer close(res.done)
-			res.cfg, res.err = p.DiscoverSMTP(ctx, address)
+			res.cfg, res.err = p.DiscoverSMTP(ctx, domain)
 		}()
 	}
 

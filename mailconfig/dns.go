@@ -38,9 +38,7 @@ var _ provider = dnsSRVProvider{}
 // DiscoverSMTP performs a DNS-based SMTP submission service discovery, as
 // defined in RFC 6186 section 3.1. RFC 8314 section 5.1 adds a new service for
 // SMTP submission with implicit TLS.
-func (dnsSRVProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
-	_, domain, _ := strings.Cut(address, "@")
-
+func (dnsSRVProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
 	hostname, port, err := discoverSRVTCP(ctx, "submissions", domain)
 	if err != nil {
 		return nil, err

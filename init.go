@@ -167,7 +167,8 @@ func (m initModel) submitEmail() (tea.Model, tea.Cmd) {
 	m.smtpConfig.Username = addr.Address
 
 	return m, func() tea.Msg {
-		cfg, err := mailconfig.DiscoverSMTP(m.ctx, addr.Address)
+		_, domain, _ := strings.Cut(addr.Address, "@")
+		cfg, err := mailconfig.DiscoverSMTP(m.ctx, domain)
 		if err != nil {
 			return fmt.Errorf("failed to discover e-mail server: %v", err)
 		}

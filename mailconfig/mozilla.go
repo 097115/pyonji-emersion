@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
 )
 
 const mozillaISPDB = "https://autoconfig.thunderbird.net/v1.1/"
@@ -109,8 +108,7 @@ var _ provider = mozillaISPDBProvider{}
 
 // DiscoverSMTP looks up the Mozilla ISPDB. See:
 // https://wiki.mozilla.org/Thunderbird:Autoconfiguration
-func (mozillaISPDBProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
-	_, domain, _ := strings.Cut(address, "@")
+func (mozillaISPDBProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
 	return discoverMozilla(ctx, mozillaISPDB+domain)
 }
 
@@ -118,8 +116,7 @@ type mozillaSubdomainProvider struct{}
 
 var _ provider = mozillaSubdomainProvider{}
 
-func (mozillaSubdomainProvider) DiscoverSMTP(ctx context.Context, address string) (*SMTP, error) {
-	_, domain, _ := strings.Cut(address, "@")
+func (mozillaSubdomainProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
 	url := "https://autoconfig." + domain + "/mail/config-v1.1.xml"
 	cfg, err := discoverMozilla(ctx, url)
 	var dnsErr *net.DNSError
