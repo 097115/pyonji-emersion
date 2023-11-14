@@ -17,7 +17,7 @@ type subdomainGuessProvider struct {
 
 var _ provider = subdomainGuessProvider{}
 
-func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
+func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, _, domain string) (*SMTP, error) {
 	host := provider.subdomain + "." + domain
 
 	port := "465"
@@ -68,7 +68,7 @@ type dnsMXGuessProvider struct{}
 
 var _ provider = dnsMXGuessProvider{}
 
-func (dnsMXGuessProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
+func (dnsMXGuessProvider) DiscoverSMTP(ctx context.Context, addr, domain string) (*SMTP, error) {
 	var resolver net.Resolver
 	records, err := resolver.LookupMX(ctx, domain)
 	if err != nil {
@@ -87,7 +87,7 @@ func (dnsMXGuessProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMT
 		return nil, ErrNotFound
 	}
 
-	return discoverSMTP(ctx, mxDomain, false)
+	return discoverSMTP(ctx, addr, mxDomain, false)
 }
 
 func stripSubdomain(name string) (string, bool) {

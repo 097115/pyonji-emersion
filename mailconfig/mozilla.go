@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 )
 
 const mozillaISPDB = "https://autoconfig.thunderbird.net/v1.1/"
@@ -39,7 +40,7 @@ const (
 	mozillaAuthPasswordCleartext mozillaAuth = "password-cleartext"
 )
 
-func discoverMozilla(ctx context.Context, url string) (*SMTP, error) {
+func discoverMozilla(ctx context.Context, addr, url string) (*SMTP, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -85,6 +86,18 @@ func discoverMozilla(ctx context.Context, url string) (*SMTP, error) {
 			Hostname: srv.Hostname,
 			Port:     fmt.Sprintf("%v", srv.Port),
 		}
+
+		// See https://wiki.mozilla.org/Thunderbird:Autoconfiguration:ConfigFileFormat#Placeholders
+		switch srv.Username {
+		case "%EMAILADDRESS%":
+			cfg.Username = addr
+		case "%EMAILLOCALPART%":
+			localPart, _, _ := strings.Cut(addr, "@")
+			cfg.Username = localPart
+		default:
+			return nil, fmt.Errorf("unsupported username placeholder in Mozilla config: %q", srv.Username)
+		}
+
 		switch srv.SocketType {
 		case mozillaSocketSSL:
 			return cfg, nil
@@ -108,17 +121,17 @@ var _ provider = mozillaISPDBProvider{}
 
 // DiscoverSMTP looks up the Mozilla ISPDB. See:
 // https://wiki.mozilla.org/Thunderbird:Autoconfiguration
-func (mozillaISPDBProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
-	return discoverMozilla(ctx, mozillaISPDB+domain)
+func (mozillaISPDBProvider) DiscoverSMTP(ctx context.Context, addr, domain string) (*SMTP, error) {
+	return discoverMozilla(ctx, addr, mozillaISPDB+domain)
 }
 
 type mozillaSubdomainProvider struct{}
 
 var _ provider = mozillaSubdomainProvider{}
 
-func (mozillaSubdomainProvider) DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
+func (mozillaSubdomainProvider) DiscoverSMTP(ctx context.Context, addr, domain string) (*SMTP, error) {
 	url := "https://autoconfig." + domain + "/mail/config-v1.1.xml"
-	cfg, err := discoverMozilla(ctx, url)
+	cfg, err := discoverMozilla(ctx, addr, url)
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
 		return nil, ErrNotFound

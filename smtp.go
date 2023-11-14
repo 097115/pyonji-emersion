@@ -14,7 +14,6 @@ import (
 type smtpConfig struct {
 	mailconfig.SMTP
 	InsecureNoTLS bool
-	Username      string
 	Password      string
 }
 

@@ -3,6 +3,7 @@ package mailconfig
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -12,13 +13,15 @@ type SMTP struct {
 	Hostname string
 	Port     string
 	STARTTLS bool
+
+	Username string
 }
 
 type provider interface {
-	DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error)
+	DiscoverSMTP(ctx context.Context, addr, domain string) (*SMTP, error)
 }
 
-func discoverSMTP(ctx context.Context, domain string, withMXGuess bool) (*SMTP, error) {
+func discoverSMTP(ctx context.Context, addr, domain string, withMXGuess bool) (*SMTP, error) {
 	providers := []provider{
 		dnsSRVProvider{},
 		mozillaISPDBProvider{},
@@ -43,7 +46,7 @@ func discoverSMTP(ctx context.Context, domain string, withMXGuess bool) (*SMTP, 
 
 		go func() {
 			defer close(res.done)
-			res.cfg, res.err = p.DiscoverSMTP(providerCtx, domain)
+			res.cfg, res.err = p.DiscoverSMTP(providerCtx, addr, domain)
 		}()
 	}
 
@@ -56,6 +59,9 @@ func discoverSMTP(ctx context.Context, domain string, withMXGuess bool) (*SMTP, 
 			return nil, ErrNotFound
 		}
 		if res.cfg != nil {
+			if res.cfg.Username == "" {
+				res.cfg.Username = addr
+			}
 			return res.cfg, nil
 		}
 		if res.err != nil && res.err != ErrNotFound && !errors.Is(res.err, context.DeadlineExceeded) && err == nil {
@@ -68,11 +74,12 @@ func discoverSMTP(ctx context.Context, domain string, withMXGuess bool) (*SMTP, 
 	return nil, err
 }
 
-func DiscoverSMTP(ctx context.Context, domain string) (*SMTP, error) {
+func DiscoverSMTP(ctx context.Context, addr string) (*SMTP, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	return discoverSMTP(ctx, domain, true)
+	_, domain, _ := strings.Cut(addr, "@")
+	return discoverSMTP(ctx, addr, domain, true)
 }
 
 type providerResult struct {
