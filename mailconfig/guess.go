@@ -28,16 +28,21 @@ func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, _, doma
 	network := "tcp"
 	addr := host + ":" + port
 
+	// If the hostname is valid but isn't an SMTP server, this is likely to
+	// timeout
+	dialCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
+	defer cancel()
+
 	var (
 		conn net.Conn
 		err  error
 	)
 	if provider.startTLS {
 		var dialer net.Dialer
-		conn, err = dialer.DialContext(ctx, network, addr)
+		conn, err = dialer.DialContext(dialCtx, network, addr)
 	} else {
 		var dialer tls.Dialer
-		conn, err = dialer.DialContext(ctx, network, addr)
+		conn, err = dialer.DialContext(dialCtx, network, addr)
 	}
 	if err != nil {
 		return nil, ErrNotFound
