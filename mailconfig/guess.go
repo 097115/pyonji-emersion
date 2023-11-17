@@ -61,7 +61,7 @@ func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, _, doma
 		return nil, ErrNotFound
 	}
 
-	return &SMTP{Hostname: host, Port: port, STARTTLS: provider.startTLS}, nil
+	return &SMTP{Hostname: host, Port: port, StartTLS: provider.startTLS}, nil
 }
 
 type dnsMXGuessProvider struct{}

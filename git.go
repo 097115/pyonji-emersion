@@ -64,7 +64,7 @@ func setGitGlobalConfig(key, value string) error {
 
 func saveGitSendEmailConfig(cfg *smtpConfig) error {
 	enc := "ssl"
-	if cfg.STARTTLS {
+	if cfg.StartTLS {
 		enc = "tls"
 	}
 
@@ -123,7 +123,7 @@ func loadGitSendEmailConfig() (*gitSendEmailConfig, error) {
 		case "", "ssl":
 			// direct TLS
 		case "tls":
-			cfg.SMTP.STARTTLS = true
+			cfg.SMTP.StartTLS = true
 		case "none":
 			cfg.SMTP.InsecureNoTLS = true
 		default:
@@ -131,7 +131,7 @@ func loadGitSendEmailConfig() (*gitSendEmailConfig, error) {
 		}
 		switch port {
 		case "":
-			if cfg.SMTP.STARTTLS {
+			if cfg.SMTP.StartTLS {
 				cfg.SMTP.Port = "submission"
 			} else {
 				cfg.SMTP.Port = "submissions"

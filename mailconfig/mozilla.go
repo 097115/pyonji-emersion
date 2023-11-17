@@ -102,7 +102,7 @@ func discoverMozilla(ctx context.Context, addr, url string) (*SMTP, error) {
 		case mozillaSocketSSL:
 			return cfg, nil
 		case mozillaSocketSTARTTLS:
-			cfg.STARTTLS = true
+			cfg.StartTLS = true
 			startTLSCfg = cfg
 		default:
 			continue

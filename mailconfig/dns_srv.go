@@ -50,7 +50,7 @@ func (dnsSRVProvider) DiscoverSMTP(ctx context.Context, _, domain string) (*SMTP
 	if err != nil {
 		return nil, err
 	} else if hostname != "" {
-		return &SMTP{Hostname: hostname, Port: port, STARTTLS: true}, nil
+		return &SMTP{Hostname: hostname, Port: port, StartTLS: true}, nil
 	}
 
 	return nil, ErrNotFound

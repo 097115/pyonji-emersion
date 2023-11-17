@@ -32,7 +32,7 @@ func (cfg *smtpConfig) dialAndAuth(ctx context.Context) (*smtpClient, error) {
 		c   *smtp.Client
 		err error
 	)
-	if cfg.STARTTLS || cfg.InsecureNoTLS {
+	if cfg.StartTLS || cfg.InsecureNoTLS {
 		c, err = smtp.Dial(addr)
 		if err == nil && !cfg.InsecureNoTLS {
 			err = c.StartTLS(nil)
