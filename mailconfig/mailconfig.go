@@ -52,11 +52,22 @@ func discoverSMTP(ctx context.Context, addr, domain string, withMXGuess bool) (*
 
 	var err error
 	for _, res := range results {
-		select {
-		case <-res.done:
-			// ok
-		case <-ctx.Done():
-			return nil, ErrNotFound
+		// If our context hasn't been cancelled, wait for the provider.
+		// Otherwise, just check if the provider has completed, skip if not.
+		if ctx.Err() == nil {
+			select {
+			case <-res.done:
+				// ok
+			case <-ctx.Done():
+				continue
+			}
+		} else {
+			select {
+			case <-res.done:
+				// ok
+			default:
+				continue
+			}
 		}
 		if res.cfg != nil {
 			if res.cfg.Username == "" {
