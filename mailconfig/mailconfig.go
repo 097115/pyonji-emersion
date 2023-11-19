@@ -21,20 +21,23 @@ type provider interface {
 	DiscoverSMTP(ctx context.Context, addr, domain string) (*SMTP, error)
 }
 
-func discoverSMTP(ctx context.Context, addr, domain string, withMXGuess bool) (*SMTP, error) {
-	providers := []provider{
-		dnsSRVProvider{},
-		mozillaISPDBProvider{},
-		mozillaSubdomainProvider{},
-		subdomainGuessProvider{"mail", false},
-		subdomainGuessProvider{"smtp", false},
-		subdomainGuessProvider{"mail", true},
-		subdomainGuessProvider{"smtp", true},
-	}
-	if withMXGuess {
-		providers = append(providers, dnsMXGuessProvider{})
-	}
+var defaultProviders = providerList{
+	dnsSRVProvider{},
+	mozillaISPDBProvider{},
+	mozillaSubdomainProvider{},
+	subdomainGuessProvider{"mail", false},
+	subdomainGuessProvider{"smtp", false},
+	subdomainGuessProvider{"mail", true},
+	subdomainGuessProvider{"smtp", true},
+}
 
+var dnsFallbackProviders = append(defaultProviders, dnsMXGuessProvider{})
+
+type providerList []provider
+
+var _ provider = providerList(nil)
+
+func (providers providerList) DiscoverSMTP(ctx context.Context, addr, domain string) (*SMTP, error) {
 	providerCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -90,7 +93,7 @@ func DiscoverSMTP(ctx context.Context, addr string) (*SMTP, error) {
 	defer cancel()
 
 	_, domain, _ := strings.Cut(addr, "@")
-	return discoverSMTP(ctx, addr, domain, true)
+	return dnsFallbackProviders.DiscoverSMTP(ctx, addr, domain)
 }
 
 type providerResult struct {

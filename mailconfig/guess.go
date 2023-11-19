@@ -92,7 +92,7 @@ func (dnsMXGuessProvider) DiscoverSMTP(ctx context.Context, addr, domain string)
 		return nil, ErrNotFound
 	}
 
-	return discoverSMTP(ctx, addr, mxDomain, false)
+	return defaultProviders.DiscoverSMTP(ctx, addr, mxDomain)
 }
 
 func stripSubdomain(name string) (string, bool) {
