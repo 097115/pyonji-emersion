@@ -94,6 +94,10 @@ func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) subm
 	getopt.FlagLong(&cfg.rerollCount, "reroll-count", 'v', "iteration number")
 	getopt.Parse()
 
+	if err := loadB4ProjectDefaults(cfg); err != nil {
+		log.Fatal(err)
+	}
+
 	if cfg.baseBranch == "" {
 		cfg.baseBranch = findGitDefaultBranch()
 	}
@@ -510,6 +514,42 @@ func saveSubmissionConfig(branch string, cfg *submissionConfig) error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+func loadB4ProjectDefaults(cfg *submissionConfig) error {
+	if cfg.to != "" {
+		return nil
+	}
+
+	toplevelDir, err := getGitToplevelDir()
+	if err != nil {
+		return err
+	}
+
+	b4ConfigPath := filepath.Join(toplevelDir, ".b4-config")
+	if _, err := os.Stat(b4ConfigPath); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	key := "b4.send-series-to"
+	cmd := exec.Command("git", "config", "--file="+b4ConfigPath, "--default=", key)
+	b, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get b4 config %q: %v", key, err)
+	}
+	v := strings.TrimSpace(string(b))
+	if v == "" {
+		return nil
+	}
+	addr, err := mail.ParseAddress(v)
+	if err != nil {
+		return fmt.Errorf("invalid b4.send-series-to: %v", err)
+	}
+	cfg.to = addr.Address
 
 	return nil
 }
