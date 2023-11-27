@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -29,9 +30,10 @@ type submissionLog struct {
 }
 
 type submissionConfig struct {
-	baseBranch  string
-	to          string
-	rerollCount string
+	baseBranch    string
+	to            string
+	rerollCount   string
+	subjectPrefix string
 }
 
 type coverLetterUpdated struct {
@@ -74,6 +76,7 @@ type submitModel struct {
 	headBranch           string
 	baseBranch           string
 	coverLetter          string
+	subjectPrefix        string
 	commits              []logCommit
 	sameAsPrevSubmission bool
 	loadingMsg           string
@@ -148,16 +151,17 @@ func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) subm
 	versionInput.SetValue(rerollCount)
 
 	return submitModel{
-		ctx:         ctx,
-		gitConfig:   gitConfig,
-		progress:    make(chan submissionProgress, 1),
-		spinner:     s,
-		to:          toInput,
-		version:     versionInput,
-		headBranch:  headBranch,
-		baseBranch:  cfg.baseBranch,
-		coverLetter: coverLetter,
-		loadingMsg:  "Loading submission...",
+		ctx:           ctx,
+		gitConfig:     gitConfig,
+		progress:      make(chan submissionProgress, 1),
+		spinner:       s,
+		to:            toInput,
+		version:       versionInput,
+		headBranch:    headBranch,
+		baseBranch:    cfg.baseBranch,
+		coverLetter:   coverLetter,
+		subjectPrefix: cfg.subjectPrefix,
+		loadingMsg:    "Loading submission...",
 	}.setState(state)
 }
 
@@ -204,9 +208,10 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadingMsg = "Submitting patches..."
 				return m, func() tea.Msg {
 					cfg := submissionConfig{
-						to:          m.to.Value(),
-						baseBranch:  m.baseBranch,
-						rerollCount: m.version.Value(),
+						to:            m.to.Value(),
+						baseBranch:    m.baseBranch,
+						rerollCount:   m.version.Value(),
+						subjectPrefix: m.subjectPrefix,
 					}
 					return submitPatches(m.ctx, m.headBranch, &cfg, m.gitConfig, m.coverLetter != "", m.progress)
 				}
@@ -395,8 +400,9 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 	}
 
 	patches, err := formatGitPatches(ctx, submission.baseBranch, &gitFormatPatchOptions{
-		RerollCount: submission.rerollCount,
-		CoverLetter: coverLetter,
+		RerollCount:   submission.rerollCount,
+		CoverLetter:   coverLetter,
+		SubjectPrefix: submission.subjectPrefix,
 	})
 	if err != nil {
 		return err
@@ -519,10 +525,6 @@ func saveSubmissionConfig(branch string, cfg *submissionConfig) error {
 }
 
 func loadB4ProjectDefaults(cfg *submissionConfig) error {
-	if cfg.to != "" {
-		return nil
-	}
-
 	toplevelDir, err := getGitToplevelDir()
 	if err != nil {
 		return err
@@ -535,23 +537,42 @@ func loadB4ProjectDefaults(cfg *submissionConfig) error {
 		return err
 	}
 
-	key := "b4.send-series-to"
-	cmd := exec.Command("git", "config", "--file="+b4ConfigPath, "--default=", key)
-	b, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to get b4 config %q: %v", key, err)
+	var to, prefixes string
+	values := map[string]*string{
+		"send-series-to": &to,
+		"send-prefixes":  &prefixes,
 	}
-	v := strings.TrimSpace(string(b))
-	if v == "" {
-		return nil
+	for k, ptr := range values {
+		k = "b4." + k
+		cmd := exec.Command("git", "config", "--file="+b4ConfigPath, "--default=", k)
+		b, err := cmd.Output()
+		if err != nil {
+			return fmt.Errorf("failed to get b4 config %q: %v", k, err)
+		}
+		*ptr = strings.TrimSpace(string(b))
 	}
-	addr, err := mail.ParseAddress(v)
-	if err != nil {
-		return fmt.Errorf("invalid b4.send-series-to: %v", err)
+
+	if cfg.to == "" && to != "" {
+		addr, err := mail.ParseAddress(to)
+		if err != nil {
+			return fmt.Errorf("invalid b4.send-series-to: %v", err)
+		}
+		cfg.to = addr.Address
 	}
-	cfg.to = addr.Address
+	if cfg.subjectPrefix == "" && prefixes != "" && validateSubjectPrefix(prefixes) {
+		cfg.subjectPrefix = "PATCH " + prefixes
+	}
 
 	return nil
+}
+
+func validateSubjectPrefix(s string) bool {
+	if len(s) > 1024 {
+		return false
+	}
+	return !strings.ContainsFunc(s, func(ch rune) bool {
+		return unicode.IsControl(ch) || ch == '\n' || ch == '\r'
+	})
 }
 
 func autosaveSendEmailTo(to string) error {

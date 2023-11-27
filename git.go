@@ -204,8 +204,9 @@ func (p *patch) Bytes() []byte {
 }
 
 type gitFormatPatchOptions struct {
-	RerollCount string
-	CoverLetter bool
+	RerollCount   string
+	CoverLetter   bool
+	SubjectPrefix string
 }
 
 func formatGitPatches(ctx context.Context, baseBranch string, options *gitFormatPatchOptions) ([]patch, error) {
@@ -220,6 +221,9 @@ func formatGitPatches(ctx context.Context, baseBranch string, options *gitFormat
 	}
 	if options.CoverLetter {
 		args = append(args, "--cover-letter", "--cover-from-description=subject")
+	}
+	if options.SubjectPrefix != "" {
+		args = append(args, "--subject-prefix="+options.SubjectPrefix)
 	}
 	args = append(args, "--base="+baseCommit, baseBranch+"..")
 
