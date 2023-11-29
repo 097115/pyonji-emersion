@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -117,6 +118,14 @@ func loadGitSendEmailConfig() (*gitSendEmailConfig, error) {
 
 	var cfg gitSendEmailConfig
 	if server != "" {
+		// git-send-email supports supplying the port in smtpServer
+		if serverHost, serverPort, err := net.SplitHostPort(server); err == nil {
+			if port != "" && port != serverPort {
+				return nil, fmt.Errorf("conflicting Git sendemail options: smtpServer = %q, smtpServerPort = %q", server, port)
+			}
+			server, port = serverHost, serverPort
+		}
+
 		cfg.SMTP = new(smtpConfig)
 		cfg.SMTP.Hostname = server
 		switch enc {
