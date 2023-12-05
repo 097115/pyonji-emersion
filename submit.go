@@ -570,9 +570,12 @@ func validateSubjectPrefix(s string) bool {
 	if len(s) > 1024 {
 		return false
 	}
-	return !strings.ContainsFunc(s, func(ch rune) bool {
-		return unicode.IsControl(ch) || ch == '\n' || ch == '\r'
-	})
+	for _, ch := range s {
+		if unicode.IsControl(ch) || ch == '\n' || ch == '\r' {
+			return false
+		}
+	}
+	return true
 }
 
 func autosaveSendEmailTo(to string) error {
