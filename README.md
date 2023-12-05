@@ -24,7 +24,7 @@ display an interface to submit your patches.
 
 Use your distribution's package manager, or:
 
-    go install 'git.sr.ht/~emersion/pyonji'
+    go install 'git.sr.ht/~emersion/pyonji@latest'
 
 ## Building
 
