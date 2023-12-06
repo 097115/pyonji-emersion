@@ -49,7 +49,19 @@ func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, _, doma
 	}
 	defer conn.Close()
 
-	// TODO: pass context somehow
+	// When the context gets cancelled, close the connection to forcibly abort
+	// any pending command
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			conn.Close()
+		case <-done:
+			// nothing to do
+		}
+	}()
+
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {
 		return nil, err
