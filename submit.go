@@ -85,6 +85,15 @@ type submitModel struct {
 }
 
 func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) submitModel {
+	if smtpConfig := gitConfig.SMTP; smtpConfig != nil {
+		if smtpConfig.Username == "" {
+			log.Fatal("missing sendemail.smtpUser in the Git configuration")
+		}
+		if smtpConfig.Password == "" {
+			log.Fatal("missing sendemail.smtpUser in the Git configuration")
+		}
+	}
+
 	headBranch := findGitCurrentBranch()
 
 	cfg, err := loadSubmissionConfig(headBranch)
