@@ -62,10 +62,7 @@ func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, _, doma
 		}
 	}()
 
-	c, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return nil, err
-	}
+	c := smtp.NewClient(conn)
 	c.CommandTimeout = 5 * time.Second
 
 	if provider.startTLS {
