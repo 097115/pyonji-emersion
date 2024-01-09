@@ -90,7 +90,7 @@ func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) subm
 			log.Fatal("missing sendemail.smtpUser in the Git configuration")
 		}
 		if smtpConfig.Password == "" {
-			log.Fatal("missing sendemail.smtpUser in the Git configuration")
+			log.Fatal("missing sendemail.smtpPass in the Git configuration")
 		}
 	}
 
