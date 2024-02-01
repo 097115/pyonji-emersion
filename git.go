@@ -163,18 +163,18 @@ func loadGitSendEmailConfig() (*gitSendEmailConfig, error) {
 	return &cfg, nil
 }
 
-func loadGitSendEmailTo() (*mail.Address, error) {
+func loadGitSendEmailTo() ([]*mail.Address, error) {
 	v, err := getGitConfig("sendemail.to")
 	if err != nil {
 		return nil, err
 	} else if v == "" {
 		return nil, nil
 	}
-	addr, err := mail.ParseAddress(v)
+	addrs, err := mail.ParseAddressList(v)
 	if err != nil {
 		return nil, fmt.Errorf("invalid sendemail.to: %v", err)
 	}
-	return addr, nil
+	return addrs, nil
 }
 
 type logCommit struct {

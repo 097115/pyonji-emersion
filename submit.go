@@ -31,7 +31,7 @@ type submissionLog struct {
 
 type submissionConfig struct {
 	baseBranch    string
-	to            string
+	to            []*mail.Address
 	rerollCount   string
 	subjectPrefix string
 }
@@ -101,10 +101,16 @@ func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) subm
 		log.Fatal(err)
 	}
 
+	var to string
 	getopt.FlagLong(&cfg.baseBranch, "base", 0, "base branch")
-	getopt.FlagLong(&cfg.to, "to", 0, "recipient")
+	getopt.FlagLong(&to, "to", 0, "recipient")
 	getopt.FlagLong(&cfg.rerollCount, "reroll-count", 'v', "iteration number")
 	getopt.Parse()
+
+	cfg.to, err = parseAddressList(to)
+	if err != nil {
+		log.Fatalf("invalid --to flag: %v", err)
+	}
 
 	if err := loadB4ProjectDefaults(cfg); err != nil {
 		log.Fatal(err)
@@ -118,13 +124,12 @@ func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) subm
 		log.Fatal("failed to find base branch")
 	}
 
-	if cfg.to == "" {
+	if len(cfg.to) == 0 {
 		to, err := loadGitSendEmailTo()
 		if err != nil {
 			log.Fatal(err)
-		} else if to != nil {
-			cfg.to = to.Address
 		}
+		cfg.to = to
 	}
 
 	rerollCount, err := getNextRerollCount(headBranch, cfg.rerollCount)
@@ -138,7 +143,7 @@ func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) subm
 	}
 
 	state := submitStateConfirm
-	if cfg.to == "" {
+	if len(cfg.to) == 0 {
 		state = submitStateTo
 	}
 
@@ -150,7 +155,7 @@ func initialSubmitModel(ctx context.Context, gitConfig *gitSendEmailConfig) subm
 	toInput.Prompt = "To "
 	toInput.PromptStyle = labelStyle.Copy()
 	toInput.TextStyle = textStyle.Copy()
-	toInput.SetValue(cfg.to)
+	toInput.SetValue(formatAddressList(cfg.to))
 
 	versionInput := textinput.New()
 	versionInput.Prompt = "Version "
@@ -216,8 +221,13 @@ func (m submitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.loadingMsg = "Submitting patches..."
 				return m, func() tea.Msg {
+					to, err := parseAddressList(m.to.Value())
+					if err != nil {
+						return err
+					}
+
 					cfg := submissionConfig{
-						to:            m.to.Value(),
+						to:            to,
 						baseBranch:    m.baseBranch,
 						rerollCount:   m.version.Value(),
 						subjectPrefix: m.subjectPrefix,
@@ -364,7 +374,7 @@ func (m submitModel) setState(state submitState) submitModel {
 }
 
 func (m submitModel) canSubmit() bool {
-	return len(m.commits) > 0 && checkAddress(m.to.Value()) && checkVersion(m.version.Value())
+	return len(m.commits) > 0 && checkAddressList(m.to.Value()) && checkVersion(m.version.Value())
 }
 
 func loadSubmissionLog(ctx context.Context, baseBranch, headBranch string) tea.Msg {
@@ -421,7 +431,7 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 	for i := range patches {
 		patch := &patches[i]
 		patch.header.SetAddressList("From", []*mail.Address{from})
-		patch.header.SetAddressList("To", []*mail.Address{{Address: submission.to}})
+		patch.header.SetAddressList("To", submission.to)
 		if err := patch.header.GenerateMessageIDWithHostname(fromHostname); err != nil {
 			return err
 		}
@@ -430,6 +440,11 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 		} else {
 			patch.header.SetMsgIDList("In-Reply-To", []string{firstMsgID})
 		}
+	}
+
+	var toAddrs []string
+	for _, addr := range submission.to {
+		toAddrs = append(toAddrs, addr.Address)
 	}
 
 	var sender mailSender
@@ -448,7 +463,7 @@ func submitPatches(ctx context.Context, headBranch string, submission *submissio
 
 	for _, patch := range patches {
 		r := bytes.NewReader(patch.Bytes())
-		err := sender.SendMail(ctx, envelopeSender, []string{submission.to}, r)
+		err := sender.SendMail(ctx, envelopeSender, toAddrs, r)
 		if err != nil {
 			return err
 		}
@@ -496,9 +511,12 @@ func loadSubmissionConfig(branch string) (*submissionConfig, error) {
 		return &submissionConfig{}, nil
 	}
 
-	var cfg submissionConfig
+	var (
+		cfg submissionConfig
+		to  string
+	)
 	entries := map[string]*string{
-		"pyonjiTo":          &cfg.to,
+		"pyonjiTo":          &to,
 		"pyonjiBase":        &cfg.baseBranch,
 		"pyonjiRerollCount": &cfg.rerollCount,
 	}
@@ -510,6 +528,12 @@ func loadSubmissionConfig(branch string) (*submissionConfig, error) {
 		*ptr = v
 	}
 
+	var err error
+	cfg.to, err = parseAddressList(to)
+	if err != nil {
+		return nil, fmt.Errorf("invalid branch pyonjiTo: %v", err)
+	}
+
 	return &cfg, nil
 }
 
@@ -519,7 +543,7 @@ func saveSubmissionConfig(branch string, cfg *submissionConfig) error {
 	}
 
 	kvs := []struct{ k, v string }{
-		{"pyonjiTo", cfg.to},
+		{"pyonjiTo", formatAddressList(cfg.to)},
 		{"pyonjiBase", cfg.baseBranch},
 		{"pyonjiRerollCount", cfg.rerollCount},
 	}
@@ -561,12 +585,12 @@ func loadB4ProjectDefaults(cfg *submissionConfig) error {
 		*ptr = strings.TrimSpace(string(b))
 	}
 
-	if cfg.to == "" && to != "" {
-		addr, err := mail.ParseAddress(to)
+	if len(cfg.to) == 0 && to != "" {
+		var err error
+		cfg.to, err = parseAddressList(to)
 		if err != nil {
 			return fmt.Errorf("invalid b4.send-series-to: %v", err)
 		}
-		cfg.to = addr.Address
 	}
 	if cfg.subjectPrefix == "" && prefixes != "" && validateSubjectPrefix(prefixes) {
 		cfg.subjectPrefix = "PATCH " + prefixes
@@ -587,11 +611,11 @@ func validateSubjectPrefix(s string) bool {
 	return true
 }
 
-func autosaveSendEmailTo(to string) error {
+func autosaveSendEmailTo(to []*mail.Address) error {
 	cur, err := loadGitSendEmailTo()
 	if err != nil {
 		return err
-	} else if cur != nil {
+	} else if len(cur) != 0 {
 		return nil // Don't overwrite any previous setting
 	}
 
@@ -605,7 +629,7 @@ func autosaveSendEmailTo(to string) error {
 		return fmt.Errorf("failed to check for MAINTAINERS: %v", err)
 	}
 
-	return setGitConfig("sendemail.to", to)
+	return setGitConfig("sendemail.to", formatAddressList(to))
 }
 
 func loadGitBranchDescription(branch string) (string, error) {
@@ -668,8 +692,8 @@ func pluralize(name string, n int) string {
 	return s
 }
 
-func checkAddress(addr string) bool {
-	_, err := mail.ParseAddress("<" + addr + ">")
+func checkAddressList(s string) bool {
+	_, err := parseAddressList(s)
 	return err == nil
 }
 
@@ -680,6 +704,28 @@ func checkVersion(ver string) bool {
 		}
 	}
 	return true
+}
+
+func parseAddressList(s string) ([]*mail.Address, error) {
+	if s == "" {
+		return nil, nil
+	}
+	return mail.ParseAddressList(s)
+}
+
+func formatAddressList(addrs []*mail.Address) string {
+	var sb strings.Builder
+	for i, addr := range addrs {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		if addr.Name != "" {
+			fmt.Fprintf(&sb, "%v <%v>", addr.Name, addr.Address)
+		} else {
+			sb.WriteString(addr.Address)
+		}
+	}
+	return sb.String()
 }
 
 type formField struct {
