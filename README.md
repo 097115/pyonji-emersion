@@ -20,6 +20,16 @@ Create a branch, commit changes, and then type `pyonji`. pyonji will ask for
 your e-mail address and password the first time it's used, and will then
 display an interface to submit your patches.
 
+## Installation
+
+Use your distribution's package manager, or:
+
+    go install 'git.sr.ht/~emersion/pyonji@latest'
+
+## Building
+
+    go build
+
 # Contributing
 
 Send patches on the [mailing list], report bugs on the [issue tracker]. Discuss

@@ -49,11 +49,20 @@ func (provider subdomainGuessProvider) DiscoverSMTP(ctx context.Context, _, doma
 	}
 	defer conn.Close()
 
-	// TODO: pass context somehow
-	c, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return nil, err
-	}
+	// When the context gets cancelled, close the connection to forcibly abort
+	// any pending command
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			conn.Close()
+		case <-done:
+			// nothing to do
+		}
+	}()
+
+	c := smtp.NewClient(conn)
 	c.CommandTimeout = 5 * time.Second
 
 	if provider.startTLS {
@@ -92,7 +101,7 @@ func (dnsMXGuessProvider) DiscoverSMTP(ctx context.Context, addr, domain string)
 		return nil, ErrNotFound
 	}
 
-	return discoverSMTP(ctx, addr, mxDomain, false)
+	return defaultProviders.DiscoverSMTP(ctx, addr, mxDomain)
 }
 
 func stripSubdomain(name string) (string, bool) {

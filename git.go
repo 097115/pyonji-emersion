@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -117,6 +118,14 @@ func loadGitSendEmailConfig() (*gitSendEmailConfig, error) {
 
 	var cfg gitSendEmailConfig
 	if server != "" {
+		// git-send-email supports supplying the port in smtpServer
+		if serverHost, serverPort, err := net.SplitHostPort(server); err == nil {
+			if port != "" && port != serverPort {
+				return nil, fmt.Errorf("conflicting Git sendemail options: smtpServer = %q, smtpServerPort = %q", server, port)
+			}
+			server, port = serverHost, serverPort
+		}
+
 		cfg.SMTP = new(smtpConfig)
 		cfg.SMTP.Hostname = server
 		switch enc {
@@ -154,18 +163,18 @@ func loadGitSendEmailConfig() (*gitSendEmailConfig, error) {
 	return &cfg, nil
 }
 
-func loadGitSendEmailTo() (*mail.Address, error) {
+func loadGitSendEmailTo() ([]*mail.Address, error) {
 	v, err := getGitConfig("sendemail.to")
 	if err != nil {
 		return nil, err
 	} else if v == "" {
 		return nil, nil
 	}
-	addr, err := mail.ParseAddress(v)
+	addrs, err := mail.ParseAddressList(v)
 	if err != nil {
 		return nil, fmt.Errorf("invalid sendemail.to: %v", err)
 	}
-	return addr, nil
+	return addrs, nil
 }
 
 type logCommit struct {
@@ -204,8 +213,9 @@ func (p *patch) Bytes() []byte {
 }
 
 type gitFormatPatchOptions struct {
-	RerollCount string
-	CoverLetter bool
+	RerollCount   string
+	CoverLetter   bool
+	SubjectPrefix string
 }
 
 func formatGitPatches(ctx context.Context, baseBranch string, options *gitFormatPatchOptions) ([]patch, error) {
@@ -220,6 +230,9 @@ func formatGitPatches(ctx context.Context, baseBranch string, options *gitFormat
 	}
 	if options.CoverLetter {
 		args = append(args, "--cover-letter", "--cover-from-description=subject")
+	}
+	if options.SubjectPrefix != "" {
+		args = append(args, "--subject-prefix="+options.SubjectPrefix)
 	}
 	args = append(args, "--base="+baseCommit, baseBranch+"..")
 

@@ -1,0 +1,3 @@
+[b4]
+	send-series-to = ~emersion/public-inbox@lists.sr.ht
+	send-prefixes = pyonji
